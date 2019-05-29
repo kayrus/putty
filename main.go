@@ -1,6 +1,7 @@
 package putty
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
@@ -11,8 +12,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/big"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -41,20 +42,67 @@ var fieldsOrder = []string{
 	"Private-MAC",
 }
 
-// golang implementation of getc syscall
-func getc(f *os.File) (byte, error) {
-	b := make([]byte, 1)
-	_, err := f.Read(b)
-	return b[0], err
+// LoadFromFile reads PuTTY key and loads its contents into the struct
+func (k *PuttyKey) LoadFromFile(path string) error {
+	path = filepath.FromSlash(path)
+
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	return k.Load(b)
+}
+
+// Load loads PuTTY key bytes into the struct
+func (k *PuttyKey) Load(b []byte) error {
+	r := bytes.NewReader(b)
+
+	return decodeFields(bufio.NewReader(r), map[string]interface{}{
+		fieldsOrder[0]: &k.Algo,
+		fieldsOrder[1]: &k.Encryption,
+		fieldsOrder[2]: &k.Comment,
+		fieldsOrder[3]: &k.PublicKey,
+		fieldsOrder[4]: &k.PrivateKey,
+		fieldsOrder[5]: &k.PrivateHash,
+		fieldsOrder[6]: &k.PrivateMac,
+	})
+	// TODO: validate Hash
+}
+
+// ParseRawPrivateKey returns a private key from a PuTTY encoded private key. It
+// supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
+func (k *PuttyKey) ParseRawPrivateKey(password []byte) (interface{}, error) {
+	if k.Encryption != "none" && len(password) == 0 {
+		return nil, fmt.Errorf("Expect password")
+	}
+
+	err := k.decrypt(password)
+	if err != nil {
+		return nil, err
+	}
+
+	switch k.Algo {
+	case "ssh-rsa":
+		return k.readRSA(password)
+	case "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521":
+		return k.readECDSA(password)
+	case "ssh-dss":
+		return k.readDSA(password)
+	case "ssh-ed25519":
+		return k.readED25519(password)
+	}
+
+	return nil, fmt.Errorf("unsupported key type %q", k.Algo)
 }
 
 // golang implementation of putty C read_header
-func readHeader(fp *os.File) ([]byte, error) {
+func readHeader(r *bufio.Reader) ([]byte, error) {
 	var len int = 39
 	var buf []byte
 
 	for {
-		c, err := getc(fp)
+		c, err := r.ReadByte()
 		if err != nil {
 			return nil, err
 		}
@@ -62,7 +110,7 @@ func readHeader(fp *os.File) ([]byte, error) {
 			return nil, fmt.Errorf("Unexpected newlines") /* failure */
 		}
 		if c == ':' {
-			c, err = getc(fp)
+			c, err = r.ReadByte()
 			if err != nil {
 				return nil, err
 			}
@@ -81,22 +129,17 @@ func readHeader(fp *os.File) ([]byte, error) {
 }
 
 // golang implementation of putty C read_body
-func readBody(fp *os.File) ([]byte, error) {
+func readBody(r *bufio.Reader) ([]byte, error) {
 	var buf []byte
 
 	for {
-		c, err := getc(fp)
+		c, err := r.ReadByte()
 		if err != nil && err != io.EOF {
 			return nil, err
 		}
 		if c == '\r' || c == '\n' || err == io.EOF {
 			if err == nil {
-				// save current position
-				pos, e := fp.Seek(0, io.SeekCurrent)
-				if e != nil {
-					return nil, e
-				}
-				c, err = getc(fp)
+				c, err = r.ReadByte()
 				if err == io.EOF {
 					return buf, nil
 				}
@@ -104,10 +147,8 @@ func readBody(fp *os.File) ([]byte, error) {
 					return nil, err
 				}
 				if c != '\r' && c != '\n' {
-					// ungetc, restore saved position
-					_, e = fp.Seek(pos, io.SeekStart)
-					if e != nil {
-						return nil, e
+					if err := r.UnreadByte(); err != nil {
+						return nil, err
 					}
 				}
 			}
@@ -120,11 +161,11 @@ func readBody(fp *os.File) ([]byte, error) {
 }
 
 // golang implementation of putty C read_blob
-func readBlob(fp *os.File, nlines int) ([]byte, error) {
+func readBlob(r *bufio.Reader, nlines int) ([]byte, error) {
 	var buf []byte
 
 	for i := 0; i < nlines; i++ {
-		line, err := readBody(fp)
+		line, err := readBody(r)
 		if err != nil {
 			return nil, err
 		}
@@ -139,7 +180,7 @@ func readBlob(fp *os.File, nlines int) ([]byte, error) {
 }
 
 // Decode fields in the order defined by "fieldsOrder"
-func decodeFields(fp *os.File, kv map[string]interface{}) error {
+func decodeFields(r *bufio.Reader, kv map[string]interface{}) error {
 	var oldFmt bool
 	for i, h := range fieldsOrder {
 		if i == 5 && !oldFmt {
@@ -148,7 +189,7 @@ func decodeFields(fp *os.File, kv map[string]interface{}) error {
 		}
 
 		if s, ok := kv[h]; ok {
-			header, err := readHeader(fp)
+			header, err := readHeader(r)
 			if err != nil {
 				if i == 0 {
 					return fmt.Errorf("No header line found in key file")
@@ -170,7 +211,7 @@ func decodeFields(fp *os.File, kv map[string]interface{}) error {
 					}
 				}
 
-				b, err := readBody(fp)
+				b, err := readBody(r)
 				if err != nil {
 					return err
 				}
@@ -208,7 +249,7 @@ func decodeFields(fp *os.File, kv map[string]interface{}) error {
 					if i >= MAX_KEY_BLOB_LINES {
 						return fmt.Errorf("Invalid number of lines: %d", i)
 					}
-					bs, err := readBlob(fp, i)
+					bs, err := readBlob(r, i)
 					if err != nil {
 						return fmt.Errorf(`Failed to read blob data for %q: %s`, v, err)
 					}
@@ -283,32 +324,8 @@ func decryptCBC(password, ciphertext []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-func (k *PuttyKey) LoadFromFile(path string) error {
-	path = filepath.FromSlash(path)
-
-	fp, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-
-	defer fp.Close()
-
-	err = decodeFields(fp, map[string]interface{}{
-		fieldsOrder[0]: &k.Algo,
-		fieldsOrder[1]: &k.Encryption,
-		fieldsOrder[2]: &k.Comment,
-		fieldsOrder[3]: &k.PublicKey,
-		fieldsOrder[4]: &k.PrivateKey,
-		fieldsOrder[5]: &k.PrivateHash,
-		fieldsOrder[6]: &k.PrivateMac,
-	})
-
-	// TODO: validate Hash
-
-	return err
-}
-
-func (k PuttyKey) CheckHMAC(password []byte) error {
+// ValidateHMAC validates PuTTY key HMAC
+func (k PuttyKey) ValidateHMAC(password []byte) error {
 	payload := bytes.NewBuffer(nil)
 	binary.Write(payload, binary.BigEndian, uint32(len(k.Algo)))
 	payload.WriteString(k.Algo)
@@ -391,8 +408,8 @@ func (k *PuttyKey) decrypt(password []byte) (err error) {
 		}
 	}
 
-	// verify key signature
-	err = k.CheckHMAC(password)
+	// validate key signature
+	err = k.ValidateHMAC(password)
 	if err != nil {
 		return err
 	}
@@ -412,30 +429,4 @@ func (k PuttyKey) checkGarbage(offset uint32) error {
 	}
 
 	return nil
-}
-
-// ParseRawPrivateKey returns a private key from a PuTTY encoded private key. It
-// supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
-func (k *PuttyKey) ParseRawPrivateKey(password []byte) (interface{}, error) {
-	if k.Encryption != "none" && len(password) == 0 {
-		return nil, fmt.Errorf("Expect password")
-	}
-
-	err := k.decrypt(password)
-	if err != nil {
-		return nil, err
-	}
-
-	switch k.Algo {
-	case "ssh-rsa":
-		return k.readRSA(password)
-	case "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521":
-		return k.readECDSA(password)
-	case "ssh-dss":
-		return k.readDSA(password)
-	case "ssh-ed25519":
-		return k.readED25519(password)
-	}
-
-	return nil, fmt.Errorf("unsupported key type %q", k.Algo)
 }
