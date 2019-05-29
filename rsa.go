@@ -9,7 +9,7 @@ import (
 func (k PuttyKey) readRSA(password []byte) (interface{}, error) {
 	var offset uint32
 	// read the header
-	header, err := readString(&k.PublicKey, &offset)
+	header, err := readString(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
@@ -18,13 +18,13 @@ func (k PuttyKey) readRSA(password []byte) (interface{}, error) {
 	}
 
 	// pub exponent
-	e, err := readBigInt(&k.PublicKey, &offset)
+	e, err := readBigInt(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
 
 	// pub modulus
-	n, err := readBigInt(&k.PublicKey, &offset)
+	n, err := readBigInt(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
@@ -36,25 +36,25 @@ func (k PuttyKey) readRSA(password []byte) (interface{}, error) {
 
 	offset = 0
 	// private exponent
-	d, err := readBigInt(&k.PrivateKey, &offset)
+	d, err := readBigInt(k.PrivateKey, &offset)
 	if err != nil {
 		return nil, err
 	}
 
 	// prime 1
-	p1, err := readBigInt(&k.PrivateKey, &offset)
+	p1, err := readBigInt(k.PrivateKey, &offset)
 	if err != nil {
 		return nil, err
 	}
 
 	// prime 2
-	p2, err := readBigInt(&k.PrivateKey, &offset)
+	p2, err := readBigInt(k.PrivateKey, &offset)
 	if err != nil {
 		return nil, err
 	}
 
 	// Qinv
-	qinv, err := readBigInt(&k.PrivateKey, &offset)
+	qinv, err := readBigInt(k.PrivateKey, &offset)
 	if err != nil {
 		return nil, err
 	}

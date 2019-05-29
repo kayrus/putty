@@ -9,7 +9,7 @@ import (
 func (k PuttyKey) readED25519(password []byte) (interface{}, error) {
 	var offset uint32
 	// read the header
-	header, err := readString(&k.PublicKey, &offset)
+	header, err := readString(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
@@ -17,7 +17,7 @@ func (k PuttyKey) readED25519(password []byte) (interface{}, error) {
 		return nil, fmt.Errorf("Invalid header inside public key: %q: expected %q", header, k.Algo)
 	}
 
-	pub, err := readBytes(&k.PublicKey, &offset)
+	pub, err := readBytes(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func (k PuttyKey) readED25519(password []byte) (interface{}, error) {
 	}
 
 	offset = 0
-	priv, err := readBytes(&k.PrivateKey, &offset)
+	priv, err := readBytes(k.PrivateKey, &offset)
 	if err != nil {
 		return nil, err
 	}

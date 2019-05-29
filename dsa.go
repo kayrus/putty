@@ -8,7 +8,7 @@ import (
 func (k PuttyKey) readDSA(password []byte) (interface{}, error) {
 	var offset uint32
 	// read the header
-	header, err := readString(&k.PublicKey, &offset)
+	header, err := readString(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
@@ -16,22 +16,22 @@ func (k PuttyKey) readDSA(password []byte) (interface{}, error) {
 		return nil, fmt.Errorf("Invalid header inside public key: %q: expected %q", header, k.Algo)
 	}
 
-	p, err := readBigInt(&k.PublicKey, &offset)
+	p, err := readBigInt(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
 
-	q, err := readBigInt(&k.PublicKey, &offset)
+	q, err := readBigInt(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
 
-	g, err := readBigInt(&k.PublicKey, &offset)
+	g, err := readBigInt(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
 
-	pub, err := readBigInt(&k.PublicKey, &offset)
+	pub, err := readBigInt(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (k PuttyKey) readDSA(password []byte) (interface{}, error) {
 	}
 
 	offset = 0
-	priv, err := readBigInt(&k.PrivateKey, &offset)
+	priv, err := readBigInt(k.PrivateKey, &offset)
 	if err != nil {
 		return nil, err
 	}

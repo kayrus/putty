@@ -11,7 +11,7 @@ import (
 func (k PuttyKey) readECDSA(password []byte) (interface{}, error) {
 	var offset uint32
 	// read the header
-	header, err := readString(&k.PublicKey, &offset)
+	header, err := readString(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
@@ -20,7 +20,7 @@ func (k PuttyKey) readECDSA(password []byte) (interface{}, error) {
 	}
 
 	// read ecdsa size
-	algo, err := readString(&k.PublicKey, &offset)
+	algo, err := readString(k.PublicKey, &offset)
 	if !strings.HasSuffix(k.Algo, algo) {
 		return nil, fmt.Errorf("Elliptic curves algorythm %q doesn't correspond to %q", algo, k.Algo)
 	}
@@ -37,7 +37,7 @@ func (k PuttyKey) readECDSA(password []byte) (interface{}, error) {
 		return nil, fmt.Errorf("Unsupported elliptic curves algorythm %q", k.Algo)
 	}
 
-	qBytes, err := readBytes(&k.PublicKey, &offset)
+	qBytes, err := readBytes(k.PublicKey, &offset)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (k PuttyKey) readECDSA(password []byte) (interface{}, error) {
 	}
 
 	offset = 0
-	priv, err := readBigInt(&k.PrivateKey, &offset)
+	priv, err := readBigInt(k.PrivateKey, &offset)
 	if err != nil {
 		return nil, err
 	}

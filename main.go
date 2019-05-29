@@ -49,34 +49,35 @@ func getc(f *os.File) (byte, error) {
 }
 
 // golang implementation of putty C read_header
-func readHeader(fp *os.File, header *[]byte) error {
+func readHeader(fp *os.File) ([]byte, error) {
 	var len int = 39
+	var buf []byte
 
 	for {
 		c, err := getc(fp)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if c == '\n' || c == '\r' {
-			return fmt.Errorf("Unexpected newlines") /* failure */
+			return nil, fmt.Errorf("Unexpected newlines") /* failure */
 		}
 		if c == ':' {
 			c, err = getc(fp)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if c != ' ' {
-				return fmt.Errorf(`Expected whitespace, got "0x%02X"`, c)
+				return nil, fmt.Errorf(`Expected whitespace, got "0x%02X"`, c)
 			}
-			return nil /* success! */
+			return buf, nil /* success! */
 		}
 		if len == 0 {
-			return fmt.Errorf("Header was not found") /* failure */
+			return nil, fmt.Errorf("Header was not found") /* failure */
 		}
-		*header = append(*header, c)
+		buf = append(buf, c)
 		len--
 	}
-	return fmt.Errorf("Loop is over") /* failure */
+	return nil, fmt.Errorf("Loop is over") /* failure */
 }
 
 // golang implementation of putty C read_body
@@ -119,19 +120,22 @@ func readBody(fp *os.File) ([]byte, error) {
 }
 
 // golang implementation of putty C read_blob
-func readBlob(fp *os.File, nlines int, bs *[]byte) error {
+func readBlob(fp *os.File, nlines int) ([]byte, error) {
+	var buf []byte
+
 	for i := 0; i < nlines; i++ {
 		line, err := readBody(fp)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		linelen := len(line)
 		if linelen%4 != 0 || linelen > 64 {
-			return fmt.Errorf("Invalid blob string length")
+			return nil, fmt.Errorf("Invalid blob string length")
 		}
-		*bs = append(*bs, line...)
+		buf = append(buf, line...)
 	}
-	return nil
+
+	return buf, nil
 }
 
 // Decode fields in the order defined by "fieldsOrder"
@@ -144,8 +148,7 @@ func decodeFields(fp *os.File, kv map[string]interface{}) error {
 		}
 
 		if s, ok := kv[h]; ok {
-			var header []byte
-			err := readHeader(fp, &header)
+			header, err := readHeader(fp)
 			if err != nil {
 				if i == 0 {
 					return fmt.Errorf("No header line found in key file")
@@ -205,8 +208,7 @@ func decodeFields(fp *os.File, kv map[string]interface{}) error {
 					if i >= MAX_KEY_BLOB_LINES {
 						return fmt.Errorf("Invalid number of lines: %d", i)
 					}
-					var bs []byte
-					err = readBlob(fp, i, &bs)
+					bs, err := readBlob(fp, i)
 					if err != nil {
 						return fmt.Errorf(`Failed to read blob data for %q: %s`, v, err)
 					}
@@ -336,16 +338,16 @@ func (k PuttyKey) CheckHMAC(password []byte) error {
 	return nil
 }
 
-func readBytes(src *[]byte, offset *uint32) ([]byte, error) {
+func readBytes(src []byte, offset *uint32) ([]byte, error) {
 	var l uint32
 	uint32size := uint32(4)
-	sl := uint32(len(*src))
+	sl := uint32(len(src))
 
 	if *offset+uint32size > sl {
 		return nil, fmt.Errorf("cannot detect element size: %d index out of range %d", *offset+l, sl)
 	}
 
-	err := binary.Read(bytes.NewBuffer((*src)[*offset:*offset+uint32size]), binary.BigEndian, &l)
+	err := binary.Read(bytes.NewBuffer(src[*offset:*offset+uint32size]), binary.BigEndian, &l)
 	if err != nil {
 		return nil, err
 	}
@@ -358,10 +360,10 @@ func readBytes(src *[]byte, offset *uint32) ([]byte, error) {
 
 	*offset += l
 
-	return (*src)[*offset-l : *offset], nil
+	return src[*offset-l : *offset], nil
 }
 
-func readString(src *[]byte, offset *uint32) (string, error) {
+func readString(src []byte, offset *uint32) (string, error) {
 	b, err := readBytes(src, offset)
 	if err != nil {
 		return "", err
@@ -370,7 +372,7 @@ func readString(src *[]byte, offset *uint32) (string, error) {
 	return string(b), nil
 }
 
-func readBigInt(src *[]byte, offset *uint32) (*big.Int, error) {
+func readBigInt(src []byte, offset *uint32) (*big.Int, error) {
 	b, err := readBytes(src, offset)
 	if err != nil {
 		return nil, err
