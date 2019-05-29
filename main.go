@@ -58,16 +58,38 @@ func (k *PuttyKey) LoadFromFile(path string) error {
 func (k *PuttyKey) Load(b []byte) error {
 	r := bytes.NewReader(b)
 
-	return decodeFields(bufio.NewReader(r), map[string]interface{}{
-		fieldsOrder[0]: &k.Algo,
-		fieldsOrder[1]: &k.Encryption,
-		fieldsOrder[2]: &k.Comment,
-		fieldsOrder[3]: &k.PublicKey,
-		fieldsOrder[4]: &k.PrivateKey,
-		fieldsOrder[5]: &k.PrivateHash,
-		fieldsOrder[6]: &k.PrivateMac,
-	})
-	// TODO: validate Hash
+	v, err := decodeFields(bufio.NewReader(r))
+	if err != nil {
+		return err
+	}
+
+	*k = *v
+
+	return nil
+}
+
+// NewFromFile creates new PuTTY structure from file
+func NewFromFile(path string) (*PuttyKey, error) {
+	k := new(PuttyKey)
+
+	err := k.LoadFromFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return k, nil
+}
+
+// New creates new PuTTY structure from key bytes
+func New(b []byte) (*PuttyKey, error) {
+	k := new(PuttyKey)
+
+	err := k.Load(b)
+	if err != nil {
+		return nil, err
+	}
+
+	return k, nil
 }
 
 // ParseRawPrivateKey returns a private key from a PuTTY encoded private key. It
@@ -180,108 +202,127 @@ func readBlob(r *bufio.Reader, nlines int) ([]byte, error) {
 }
 
 // Decode fields in the order defined by "fieldsOrder"
-func decodeFields(r *bufio.Reader, kv map[string]interface{}) error {
+func decodeFields(r *bufio.Reader) (*PuttyKey, error) {
 	var oldFmt bool
+
+	k := new(PuttyKey)
+
 	for i, h := range fieldsOrder {
 		if i == 5 && !oldFmt {
 			// new format, detecting "PrivateMac" instead of "PrivateHash"
 			continue
 		}
 
-		if s, ok := kv[h]; ok {
-			header, err := readHeader(r)
+		header, err := readHeader(r)
+		if err != nil {
+			if i == 0 {
+				return nil, fmt.Errorf("No header line found in key file")
+			}
+			return nil, err
+		}
+
+		v := string(header)
+		if (i == 0 && strings.HasPrefix(v, h)) || v == h {
+			// check the header
+			if i == 0 {
+				switch v {
+				case fmt.Sprintf("%s%d", h, 1):
+					oldFmt = true
+					return nil, fmt.Errorf("PuTTY key format too old")
+				case fmt.Sprintf("%s%d", h, 2):
+					oldFmt = false
+				default:
+					return nil, fmt.Errorf("PuTTY key format too new")
+				}
+			}
+
+			b, err := readBody(r)
 			if err != nil {
-				if i == 0 {
-					return fmt.Errorf("No header line found in key file")
-				}
-				return err
+				return nil, err
 			}
 
-			if v := string(header); strings.HasPrefix(v, h) {
-				// check the header
-				if i == 0 {
-					switch v {
-					case fmt.Sprintf("%s%d", h, 1):
-						oldFmt = true
-						return fmt.Errorf("PuTTY key format too old")
-					case fmt.Sprintf("%s%d", h, 2):
-						oldFmt = false
-					default:
-						return fmt.Errorf("PuTTY key format too new")
-					}
+			// check the key algo
+			if i == 0 {
+				switch string(b) {
+				case "ssh-rsa":
+				case "ssh-dss":
+				case "ecdsa-sha2-nistp256":
+				case "ecdsa-sha2-nistp384":
+				case "ecdsa-sha2-nistp521":
+				case "ssh-ed25519":
+				default:
+					return nil, fmt.Errorf("Invalid key algorithm: %s", b)
 				}
 
-				b, err := readBody(r)
+				k.Algo = string(b)
+				continue
+			}
+
+			// check the encryption format
+			if i == 1 {
+				switch string(b) {
+				case "none":
+				case "aes256-cbc":
+				default:
+					return nil, fmt.Errorf("Invalid encryption format: %s", b)
+				}
+
+				k.Encryption = string(b)
+				continue
+			}
+
+			if i == 2 {
+				k.Comment = string(b)
+				continue
+			}
+
+			// Read blobs data
+			if i == 3 || i == 4 {
+				n, err := strconv.Atoi(string(b))
 				if err != nil {
-					return err
+					return nil, err
+				}
+				if n >= MAX_KEY_BLOB_LINES {
+					return nil, fmt.Errorf("Invalid number of lines: %d", n)
+				}
+				bs, err := readBlob(r, n)
+				if err != nil {
+					return nil, fmt.Errorf(`Failed to read blob data for %q: %s`, v, err)
 				}
 
-				// check the key algo
-				if i == 0 {
-					switch string(b) {
-					case "ssh-rsa":
-					case "ssh-dss":
-					case "ecdsa-sha2-nistp256":
-					case "ecdsa-sha2-nistp384":
-					case "ecdsa-sha2-nistp521":
-					case "ssh-ed25519":
-					default:
-						return fmt.Errorf("Invalid key algorithm: %s", b)
-					}
+				var t []byte
+
+				if t, err = base64.StdEncoding.DecodeString(string(bs)); err != nil {
+					return nil, fmt.Errorf("base64 decode error for the %h header", h)
 				}
 
-				// check the encryption format
-				if i == 1 {
-					switch string(b) {
-					case "none":
-					case "aes256-cbc":
-					default:
-						return fmt.Errorf("Invalid encryption format: %s", b)
-					}
-				}
-
-				// Read blobs data
-				if i == 3 || i == 4 {
-					i, err := strconv.Atoi(string(b))
-					if err != nil {
-						return err
-					}
-					if i >= MAX_KEY_BLOB_LINES {
-						return fmt.Errorf("Invalid number of lines: %d", i)
-					}
-					bs, err := readBlob(r, i)
-					if err != nil {
-						return fmt.Errorf(`Failed to read blob data for %q: %s`, v, err)
-					}
-
-					if v, ok := s.(*[]byte); ok {
-						*v, err = base64.StdEncoding.DecodeString(string(bs))
-						if err != nil {
-							return fmt.Errorf("base64 decode error for the %h header", h)
-						}
-					} else {
-						return fmt.Errorf("invalid type for the %h header", h)
-					}
-
-					continue
-				}
-
-				if v, ok := s.(*string); ok {
-					*v = string(b)
+				if i == 3 {
+					k.PublicKey = t
 				} else {
-					return fmt.Errorf("invalid type for the %h header", h)
+					k.PrivateKey = t
 				}
 
-			} else {
-				if i == 0 {
-					return fmt.Errorf("Not a PuTTY SSH-2 private key")
-				}
-				return fmt.Errorf(`Unexpected header %q, expecting %q`, v, h)
+				continue
 			}
+
+			if i == 5 {
+				k.PrivateHash = string(b)
+				continue
+			}
+
+			if i == 6 {
+				k.PrivateMac = string(b)
+				continue
+			}
+		} else {
+			if i == 0 {
+				return nil, fmt.Errorf("Not a PuTTY SSH-2 private key")
+			}
+			return nil, fmt.Errorf(`Unexpected header %q, expecting %q`, v, h)
 		}
 	}
 
-	return nil
+	return k, nil
 }
 
 func decryptCBC(password, ciphertext []byte) ([]byte, error) {
