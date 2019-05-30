@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (k PuttyKey) readDSA(password []byte) (interface{}, error) {
+func (k Key) readDSA(password []byte) (interface{}, error) {
 	var offset uint32
 	// read the header
 	header, err := readString(k.PublicKey, &offset)

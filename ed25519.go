@@ -6,7 +6,7 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
-func (k PuttyKey) readED25519(password []byte) (interface{}, error) {
+func (k Key) readED25519(password []byte) (interface{}, error) {
 	var offset uint32
 	// read the header
 	header, err := readString(k.PublicKey, &offset)
