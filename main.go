@@ -241,8 +241,9 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 				return nil, err
 			}
 
-			// check the key algo
-			if i == 0 {
+			switch i {
+			case 0:
+				// check the key algo
 				switch string(b) {
 				case "ssh-rsa":
 				case "ssh-dss":
@@ -253,13 +254,9 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 				default:
 					return nil, fmt.Errorf("Invalid key algorithm: %s", b)
 				}
-
 				k.Algo = string(b)
-				continue
-			}
-
-			// check the encryption format
-			if i == 1 {
+			case 1:
+				// check the encryption format
 				switch string(b) {
 				case "none":
 				case "aes256-cbc":
@@ -268,16 +265,10 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 				}
 
 				k.Encryption = string(b)
-				continue
-			}
-
-			if i == 2 {
+			case 2:
 				k.Comment = string(b)
-				continue
-			}
-
-			// Read blobs data
-			if i == 3 || i == 4 {
+			case 3, 4:
+				// Read blobs data
 				n, err := strconv.Atoi(string(b))
 				if err != nil {
 					return nil, err
@@ -290,29 +281,23 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 					return nil, fmt.Errorf(`Failed to read blob data for %q: %s`, v, err)
 				}
 
-				var t []byte
-
-				if t, err = base64.StdEncoding.DecodeString(string(bs)); err != nil {
+				v, err := base64.StdEncoding.DecodeString(string(bs))
+				if err != nil {
 					return nil, fmt.Errorf("base64 decode error for the %s header", h)
 				}
-
 				if i == 3 {
-					k.PublicKey = t
+					k.PublicKey = v
 				} else {
-					k.PrivateKey = t
+					k.PrivateKey = v
 				}
-
-				continue
-			}
-
-			if i == 5 {
+			case 5:
+				// read hash
 				k.PrivateHash = string(b)
-				continue
-			}
-
-			if i == 6 {
+			case 6:
+				// read signature
 				k.PrivateMac = string(b)
-				continue
+			default:
+				return nil, fmt.Errorf("Index is out of range")
 			}
 		} else {
 			if i == 0 {
