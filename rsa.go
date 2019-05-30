@@ -6,7 +6,7 @@ import (
 	"math/big"
 )
 
-func (k PuttyKey) readRSA(password []byte) (interface{}, error) {
+func (k Key) readRSA(password []byte) (interface{}, error) {
 	var offset uint32
 	// read the header
 	header, err := readString(k.PublicKey, &offset)
@@ -87,7 +87,7 @@ func (k PuttyKey) readRSA(password []byte) (interface{}, error) {
 
 	// compare source and computed Qinv
 	if qinv.Cmp(privateKey.Precomputed.Qinv) != 0 {
-		return nil, fmt.Errorf("Invalid precomputed data: %s")
+		return nil, fmt.Errorf("Invalid precomputed data: %s", privateKey.Precomputed.Qinv)
 	}
 
 	return privateKey, nil

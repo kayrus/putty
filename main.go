@@ -19,10 +19,10 @@ import (
 	"strings"
 )
 
-const MAX_KEY_BLOB_SIZE = 262144
-const MAX_KEY_BLOB_LINES = (MAX_KEY_BLOB_SIZE / 48)
+const MaxKeyBlobSize = 262144
+const MaxKeyBlobLines = (MaxKeyBlobSize / 48)
 
-type PuttyKey struct {
+type Key struct {
 	Algo        string
 	PublicKey   []byte
 	PrivateKey  []byte
@@ -43,7 +43,7 @@ var fieldsOrder = []string{
 }
 
 // LoadFromFile reads PuTTY key and loads its contents into the struct
-func (k *PuttyKey) LoadFromFile(path string) error {
+func (k *Key) LoadFromFile(path string) error {
 	path = filepath.FromSlash(path)
 
 	b, err := ioutil.ReadFile(path)
@@ -55,7 +55,7 @@ func (k *PuttyKey) LoadFromFile(path string) error {
 }
 
 // Load loads PuTTY key bytes into the struct
-func (k *PuttyKey) Load(b []byte) error {
+func (k *Key) Load(b []byte) error {
 	r := bytes.NewReader(b)
 
 	v, err := decodeFields(bufio.NewReader(r))
@@ -69,8 +69,8 @@ func (k *PuttyKey) Load(b []byte) error {
 }
 
 // NewFromFile creates new PuTTY structure from file
-func NewFromFile(path string) (*PuttyKey, error) {
-	k := new(PuttyKey)
+func NewFromFile(path string) (*Key, error) {
+	k := new(Key)
 
 	err := k.LoadFromFile(path)
 	if err != nil {
@@ -81,8 +81,8 @@ func NewFromFile(path string) (*PuttyKey, error) {
 }
 
 // New creates new PuTTY structure from key bytes
-func New(b []byte) (*PuttyKey, error) {
-	k := new(PuttyKey)
+func New(b []byte) (*Key, error) {
+	k := new(Key)
 
 	err := k.Load(b)
 	if err != nil {
@@ -94,7 +94,7 @@ func New(b []byte) (*PuttyKey, error) {
 
 // ParseRawPrivateKey returns a private key from a PuTTY encoded private key. It
 // supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
-func (k *PuttyKey) ParseRawPrivateKey(password []byte) (interface{}, error) {
+func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
 	if k.Encryption != "none" && len(password) == 0 {
 		return nil, fmt.Errorf("Expect password")
 	}
@@ -120,7 +120,7 @@ func (k *PuttyKey) ParseRawPrivateKey(password []byte) (interface{}, error) {
 
 // golang implementation of putty C read_header
 func readHeader(r *bufio.Reader) ([]byte, error) {
-	var len int = 39
+	var len = 39
 	var buf []byte
 
 	for {
@@ -202,10 +202,10 @@ func readBlob(r *bufio.Reader, nlines int) ([]byte, error) {
 }
 
 // Decode fields in the order defined by "fieldsOrder"
-func decodeFields(r *bufio.Reader) (*PuttyKey, error) {
+func decodeFields(r *bufio.Reader) (*Key, error) {
 	var oldFmt bool
 
-	k := new(PuttyKey)
+	k := new(Key)
 
 	for i, h := range fieldsOrder {
 		if i == 5 && !oldFmt {
@@ -282,7 +282,7 @@ func decodeFields(r *bufio.Reader) (*PuttyKey, error) {
 				if err != nil {
 					return nil, err
 				}
-				if n >= MAX_KEY_BLOB_LINES {
+				if n >= MaxKeyBlobLines {
 					return nil, fmt.Errorf("Invalid number of lines: %d", n)
 				}
 				bs, err := readBlob(r, n)
@@ -293,7 +293,7 @@ func decodeFields(r *bufio.Reader) (*PuttyKey, error) {
 				var t []byte
 
 				if t, err = base64.StdEncoding.DecodeString(string(bs)); err != nil {
-					return nil, fmt.Errorf("base64 decode error for the %h header", h)
+					return nil, fmt.Errorf("base64 decode error for the %s header", h)
 				}
 
 				if i == 3 {
@@ -366,7 +366,7 @@ func decryptCBC(password, ciphertext []byte) ([]byte, error) {
 }
 
 // ValidateHMAC validates PuTTY key HMAC
-func (k PuttyKey) ValidateHMAC(password []byte) error {
+func (k Key) ValidateHMAC(password []byte) error {
 	payload := bytes.NewBuffer(nil)
 	binary.Write(payload, binary.BigEndian, uint32(len(k.Algo)))
 	payload.WriteString(k.Algo)
@@ -439,14 +439,14 @@ func readBigInt(src []byte, offset *uint32) (*big.Int, error) {
 	return new(big.Int).SetBytes(b), nil
 }
 
-func (k *PuttyKey) decrypt(password []byte) (err error) {
+func (k *Key) decrypt(password []byte) (err error) {
 	// decrypt the key, when it is encrypted
 	if k.Encryption != "none" {
-		if v, err := decryptCBC(password, k.PrivateKey); err != nil {
+		v, err := decryptCBC(password, k.PrivateKey)
+		if err != nil {
 			return err
-		} else {
-			k.PrivateKey = v
 		}
+		k.PrivateKey = v
 	}
 
 	// validate key signature
@@ -458,7 +458,7 @@ func (k *PuttyKey) decrypt(password []byte) (err error) {
 	return nil
 }
 
-func (k PuttyKey) checkGarbage(offset uint32) error {
+func (k Key) checkGarbage(offset uint32) error {
 	if k.Encryption != "none" {
 		// normalize the size of the decrypted part (should be % aes.BlockSize)
 		offset = offset + aes.BlockSize - offset&(aes.BlockSize-1)
