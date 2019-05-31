@@ -86,7 +86,40 @@ MXs=
 Private-Lines: 1
 IcDcTw/elt2xwgWoweaz0wb4mHVCLc3w64YXc8hxouE=
 Private-MAC: 30b6587e0f0e4baf38895408d5d6c903add96816`,
-			encryptionMethod: "dsa",
+			encryptionMethod: "ecdsa",
+			password:         "testkey",
+		},
+		{
+			// puttygen -t ecdsa -b 384 -C "a@b" -o pass.ecdsa.ppk
+			content: `PuTTY-User-Key-File-2: ecdsa-sha2-nistp384
+Encryption: aes256-cbc
+Comment: a@b
+Public-Lines: 3
+AAAAE2VjZHNhLXNoYTItbmlzdHAzODQAAAAIbmlzdHAzODQAAABhBMLZhNzFeAQG
+bMx96v8vL/a+bI/nF1/8iN6cXgGph/IodS1G/ikq75ufDbKH+0ZmKnlP3j08Vtit
+pkdmmIkTukvrrLlYnhN4BY5qyvy259a3j6RUGvYzYA33t5FQW9PCOQ==
+Private-Lines: 2
+tQBqst/bUEfUTKGbBv17b1Mb38AYaUT3Wposs+ZydBc1uHg54tM+kzCuon+4/36o
+dRKoYQjl8YUcKtPkihNRKw==
+Private-MAC: 898b91d24130483ba2a5cf478ed65386b325aba8`,
+			encryptionMethod: "ecdsa",
+			password:         "testkey",
+		},
+		{
+			// puttygen -t ecdsa -b 521 -C "a@b" -o pass.ecdsa.ppk
+			content: `PuTTY-User-Key-File-2: ecdsa-sha2-nistp521
+Encryption: aes256-cbc
+Comment: a@b
+Public-Lines: 4
+AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAFIXU1DQU+c
+yADEnp95G7N7zxNQ2Bj7bAz5cAIxEcBuGd707/Z96eZGsF4din4Grfse4gFmKsNO
+Uzdo0QPZ4BDdLACe5gysjxHi5Qa65y79PjpOo8qYCDIocf/aeX24Q8MlnbNK4lHO
+M8j6NJi2tQsp/Vaf1h+FHViV4meyanYyjZrljQ==
+Private-Lines: 2
+7KW71RQdH1EQD2nBdI7y8JmufwoX2bupP8QCcS9/bS+pZQCGu0XuzBd8YswfUl9H
+fKT7hsBrywG5Z3ujmLerhf1bCIKotolmpxGQyPE0bCE=
+Private-MAC: 586871c9dad8859f3d9b6efad81d3c26d923040c`,
+			encryptionMethod: "ecdsa",
 			password:         "testkey",
 		},
 		{
