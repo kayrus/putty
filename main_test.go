@@ -185,3 +185,31 @@ func validateFields(key *Key, t *testing.T) {
 		t.Errorf("got=[%s], expected=[%s]", key.PrivateMac, expectedPrivateMAC)
 	}
 }
+
+func TestKey_ParseRawPrivateKey(t *testing.T) {
+	// generated using: puttygen -t rsa -b 512 -C "a@b" -o pass.ppk
+	// "testkey" is the passphrase
+	keyContentRSAPassword := `PuTTY-User-Key-File-2: ssh-rsa
+Encryption: aes256-cbc
+Comment: a@b
+Public-Lines: 2
+AAAAB3NzaC1yc2EAAAABJQAAAEEAorCK9W8rDXirgPGwRLXZOQYlASsqjMQ2t9xQ
+k1Aw+f8JJ7qYaFEwpcWGWf/br3n83FIl18r3AIIIU/WjiUIlbw==
+Private-Lines: 4
+ZJsVbNlwaPjIrs9KiYIWTaBXifB7jJH6CdADEd5DV2jhQk+xi5PWdNf1uLnlAPpE
+0OvpMjU66gTsjuirmyi53nRFtqoCjjm7waf3x9lbNDoVUhWTV+JK4NTR2T0nnjnO
+D51wcjdd2aEcpvif7LNSksRJZkJuMJVt2o68SDM4kQlQivc9lBf3HR8t3yxxjNV2
+lmHm9dFVUGKo7nh/eyWzo1AibICdfMnc4pc69FstgM5Nuetl1Lq157XFvKKZyisd
+Private-MAC: 7f8e59f1f2268600076dbdef55c6acb91c6c1578`
+
+	key, err := New([]byte(keyContentRSAPassword))
+	if err != nil {
+		t.Errorf("error loading key")
+	}
+
+	_, err = key.ParseRawPrivateKey([]byte("testkey"))
+	if err != nil {
+		t.Errorf("error decrypting key")
+	}
+
+}
