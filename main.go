@@ -12,8 +12,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -44,14 +44,20 @@ var fieldsOrder = []string{
 
 // LoadFromFile reads PuTTY key and loads its contents into the struct
 func (k *Key) LoadFromFile(path string) error {
-	path = filepath.FromSlash(path)
+	f, err := os.Open(filepath.FromSlash(path))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 
-	b, err := ioutil.ReadFile(path)
+	v, err := decodeFields(bufio.NewReader(f))
 	if err != nil {
 		return err
 	}
 
-	return k.Load(b)
+	*k = *v
+
+	return nil
 }
 
 // Load loads PuTTY key bytes into the struct
@@ -142,12 +148,13 @@ func readHeader(r *bufio.Reader) ([]byte, error) {
 			return buf, nil /* success! */
 		}
 		if len == 0 {
-			return nil, fmt.Errorf("Header was not found") /* failure */
+			break /* failure */
 		}
 		buf = append(buf, c)
 		len--
 	}
-	return nil, fmt.Errorf("Loop is over") /* failure */
+
+	return nil, fmt.Errorf("Header length exceeded %d bytes", 39) /* failure */
 }
 
 // golang implementation of putty C read_body
@@ -216,7 +223,7 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 		header, err := readHeader(r)
 		if err != nil {
 			if i == 0 {
-				return nil, fmt.Errorf("No header line found in key file")
+				return nil, fmt.Errorf("No header line found in key file: %s", err)
 			}
 			return nil, err
 		}
