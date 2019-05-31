@@ -21,6 +21,91 @@ ACEAgd1SYGV2aEEMQaMGQ4CnjQeiAuZL4z7OVTBTrtGap1A=
 Private-MAC: 3c3a9bd98e8e912f6163be95321676b6103aaed8`
 )
 
+var (
+	keysWithPassword = []struct {
+		content          string
+		encryptionMethod string
+		password         string
+	}{
+		{
+			// puttygen -t rsa -b 512 -C "a@b" -o pass.ppk
+			content: `PuTTY-User-Key-File-2: ssh-rsa
+Encryption: aes256-cbc
+Comment: a@b
+Public-Lines: 2
+AAAAB3NzaC1yc2EAAAABJQAAAEEAorCK9W8rDXirgPGwRLXZOQYlASsqjMQ2t9xQ
+k1Aw+f8JJ7qYaFEwpcWGWf/br3n83FIl18r3AIIIU/WjiUIlbw==
+Private-Lines: 4
+ZJsVbNlwaPjIrs9KiYIWTaBXifB7jJH6CdADEd5DV2jhQk+xi5PWdNf1uLnlAPpE
+0OvpMjU66gTsjuirmyi53nRFtqoCjjm7waf3x9lbNDoVUhWTV+JK4NTR2T0nnjnO
+D51wcjdd2aEcpvif7LNSksRJZkJuMJVt2o68SDM4kQlQivc9lBf3HR8t3yxxjNV2
+lmHm9dFVUGKo7nh/eyWzo1AibICdfMnc4pc69FstgM5Nuetl1Lq157XFvKKZyisd
+Private-MAC: 7f8e59f1f2268600076dbdef55c6acb91c6c1578`,
+			encryptionMethod: "rsa",
+			password:         "testkey",
+		},
+		{
+			// puttygen -t ecdsa -b 256 -C "a@b" -o pass.ecdsa.ppk
+			content: `PuTTY-User-Key-File-2: ecdsa-sha2-nistp256
+Encryption: aes256-cbc
+Comment: a@b
+Public-Lines: 3
+AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBGascQ2IAWOr
+eeFFvfkMPrEzIv9YzW4xPAhdnKcHmpBaCGnru7j5YilLdanHF1j3E65/nsUJOAt8
++j3eSrULEEE=
+Private-Lines: 1
+61hg1CoGUcsBB8u5TD48gzdmxMDP6+D+GhD4UzDisD+iKehU8PatDdQIVtRUY8ja
+Private-MAC: 07bafdfa36c3184d01f79e0db8f668e761ab4e20`,
+			encryptionMethod: "ecdsa",
+			password:         "testkey",
+		},
+		{
+			// puttygen -t ecdsa -b 256 -C "a@b" -o pass.ecdsa.ppk
+			content: `PuTTY-User-Key-File-2: ssh-dss
+Encryption: aes256-cbc
+Comment: a@b
+Public-Lines: 18
+AAAAB3NzaC1kc3MAAAEBAMLTkybOY3kUIdFXaZq2osYuxwaqYum65goAUvZmanCG
+Mim9TRNCw+DA+MiZduKgBcXPuTFZyVNkDDodWW6KhHgT3sMHsIA5Mh9XvyrtQKvv
+1yOGeHUOwjxohQQm5NVr5CQcpkyd3x8bHcaiFEaTZDuw7GksbW2lsa4lyv0GFUc8
+9gaLDMC9ipOwFER2pP7AlIg9qj5Qgrj2z/KkZQGVPObae2L+oqkfwD8rX5cHWzie
+ARxQDfVhOagF32Jaxt4+QODGD00cN1oCRtkOUD5HPy96HvOx0xwhDrAU9YQPgl2q
+SaB3Bq6s2C+9Dn01ugQ7ik99cDhFp2HefwUcCGqb8zMAAAAVAOXfaExPDDBbC0JB
+0JQpnyRyfTcBAAABAFKVIBswBAA845IZ8fuMcA8JXzLbJqq5IyYL5P9nDNZFMbSm
+5pJbpV5msnYfJBgeFhX4buXbve7ehctIpVgkShWIIMgT5mKQv6BvaOchkIFwKdQE
+dypPmJOgSCiij3000TVzky4A6KZZI7+XtC+rtjnDjuk6v2dn4hVa2khW/Adr/eHU
+RCDfez1bJobglBs9xtYIOmw1xZzaRQi1nKBUimfxFEGMRinhCss+1qh73K6HRvTC
+9kEgJ4Lrn6NJQFtlFB4P2PEcqfKp3EsbGGlV52XLIv5fHvtt2xR24k2oebcS2fq+
+dXEg5Sg9AnOY7t3KwMWrv+2KRC7XGh+55+pfOdMAAAEBAKplqzkQyLR+55/DJC9s
+JeAsBHhws+xCLkX1waKCrCVjkhsz35WrEGIgsboJ2I9KIZO3be7XReyMLMEAcBBf
+f0RZ6ZlsbqPByoOBYUdahlwLc/m71pUs6X6yLv9MLW46BTmTneZRGtLTdK2ouSbW
+q1gbY2p8dnR2TrCThmde+2U4RzFvI30Layu1Amst6kt9Zcz3eV+lxpR7vNFgq4kB
+2QgVgh8e7keg1ebzl0nRBk4+kFZhLOT5nY4aJ1TRiD4TGuSugBQSfRW60LOf4R28
+aWxu7A5Jbsm8fATR3N0bWgOQWc4cRC7t3mb0Xrt2bW2amcWEkZF57uV5Ldv7aKAK
+MXs=
+Private-Lines: 1
+IcDcTw/elt2xwgWoweaz0wb4mHVCLc3w64YXc8hxouE=
+Private-MAC: 30b6587e0f0e4baf38895408d5d6c903add96816`,
+			encryptionMethod: "dsa",
+			password:         "testkey",
+		},
+		{
+			// puttygen -t ed25519 -b 256 -C "a@b" -o pass.ed25519.ppk
+			content: `PuTTY-User-Key-File-2: ssh-ed25519
+Encryption: aes256-cbc
+Comment: a@b
+Public-Lines: 2
+AAAAC3NzaC1lZDI1NTE5AAAAIMb3N9pbqMpSJRFb/WF8Wcz80SiW8emW3aLFqdRA
+rs+r
+Private-Lines: 1
+i6a/aAknwkK/cVT8nW9zcsOJDvOdPvfBlx0suOtygmSbz9L4yoBAZZu8AHxWDSgm
+Private-MAC: 8fa9edfc1b94bec840ee1526d290bf1d8eb9fbc9`,
+			encryptionMethod: "ed25519",
+			password:         "testkey",
+		},
+	}
+)
+
 func Test_readHeader(t *testing.T) {
 
 	header := "PuTTY-User-Key-File-2: ssh-rsa"
@@ -186,30 +271,16 @@ func validateFields(key *Key, t *testing.T) {
 	}
 }
 
-func TestKey_ParseRawPrivateKey(t *testing.T) {
-	// generated using: puttygen -t rsa -b 512 -C "a@b" -o pass.ppk
-	// "testkey" is the passphrase
-	keyContentRSAPassword := `PuTTY-User-Key-File-2: ssh-rsa
-Encryption: aes256-cbc
-Comment: a@b
-Public-Lines: 2
-AAAAB3NzaC1yc2EAAAABJQAAAEEAorCK9W8rDXirgPGwRLXZOQYlASsqjMQ2t9xQ
-k1Aw+f8JJ7qYaFEwpcWGWf/br3n83FIl18r3AIIIU/WjiUIlbw==
-Private-Lines: 4
-ZJsVbNlwaPjIrs9KiYIWTaBXifB7jJH6CdADEd5DV2jhQk+xi5PWdNf1uLnlAPpE
-0OvpMjU66gTsjuirmyi53nRFtqoCjjm7waf3x9lbNDoVUhWTV+JK4NTR2T0nnjnO
-D51wcjdd2aEcpvif7LNSksRJZkJuMJVt2o68SDM4kQlQivc9lBf3HR8t3yxxjNV2
-lmHm9dFVUGKo7nh/eyWzo1AibICdfMnc4pc69FstgM5Nuetl1Lq157XFvKKZyisd
-Private-MAC: 7f8e59f1f2268600076dbdef55c6acb91c6c1578`
+func TestParseRawPrivateKey(t *testing.T) {
+	for _, encryptedKey := range keysWithPassword {
+		key, err := New([]byte(encryptedKey.content))
+		if err != nil {
+			t.Errorf("error loading key")
+		}
 
-	key, err := New([]byte(keyContentRSAPassword))
-	if err != nil {
-		t.Errorf("error loading key")
+		_, err = key.ParseRawPrivateKey([]byte("testkey"))
+		if err != nil {
+			t.Errorf("error decrypting key")
+		}
 	}
-
-	_, err = key.ParseRawPrivateKey([]byte("testkey"))
-	if err != nil {
-		t.Errorf("error decrypting key")
-	}
-
 }
