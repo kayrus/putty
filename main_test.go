@@ -144,7 +144,7 @@ func Test_readHeader(t *testing.T) {
 	header := "PuTTY-User-Key-File-2: ssh-rsa"
 	expectedHeaderFormat := "PuTTY-User-Key-File-2"
 	reader := strings.NewReader(header)
-	h, err := readHeaderFormat(bufio.NewReader(reader))
+	h, err := readHeader(bufio.NewReader(reader))
 
 	if err != nil {
 		t.Errorf("got=[%s], expected=[%s]", h, expectedHeaderFormat)
@@ -152,7 +152,7 @@ func Test_readHeader(t *testing.T) {
 
 	header = ""
 	reader = strings.NewReader(header)
-	_, err = readHeaderFormat(bufio.NewReader(reader))
+	_, err = readHeader(bufio.NewReader(reader))
 	if err == nil {
 		t.Errorf("Header empty")
 	}
@@ -160,28 +160,28 @@ func Test_readHeader(t *testing.T) {
 	header = `
 	PuTTY-User-Key-File-2: ssh-rsa`
 	reader = strings.NewReader(header)
-	_, err = readHeaderFormat(bufio.NewReader(reader))
+	_, err = readHeader(bufio.NewReader(reader))
 	if err == nil {
 		t.Errorf("No newlines allowed in header.")
 	}
 
 	header = "PuTTY-User-Key-File-2:"
 	reader = strings.NewReader(header)
-	_, err = readHeaderFormat(bufio.NewReader(reader))
+	_, err = readHeader(bufio.NewReader(reader))
 	if err == nil {
 		t.Errorf("Missing algorithm in header")
 	}
 
 	header = "PuTTY-User-Key-File-2:_ssh-rsa"
 	reader = strings.NewReader(header)
-	_, err = readHeaderFormat(bufio.NewReader(reader))
+	_, err = readHeader(bufio.NewReader(reader))
 	if err == nil {
 		t.Errorf("Expecting whitespace after ':' in header.")
 	}
 
 	header = ""
 	reader = strings.NewReader(header)
-	_, err = readHeaderFormat(bufio.NewReader(reader))
+	_, err = readHeader(bufio.NewReader(reader))
 	if err == nil {
 		t.Errorf("Header empty")
 	}

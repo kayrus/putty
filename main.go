@@ -119,7 +119,8 @@ func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
 }
 
 // golang implementation of putty C read_header
-func readHeaderFormat(r *bufio.Reader) ([]byte, error) {
+func readHeader(r *bufio.Reader) ([]byte, error) {
+	var len = 39
 	var buf []byte
 
 	for {
@@ -128,7 +129,7 @@ func readHeaderFormat(r *bufio.Reader) ([]byte, error) {
 			return nil, err
 		}
 		if c == '\n' || c == '\r' {
-			return nil, fmt.Errorf("Unexpected newlines") /* failure */
+			return nil, fmt.Errorf("unexpected newlines") /* failure */
 		}
 		if c == ':' {
 			c, err = r.ReadByte()
@@ -136,13 +137,18 @@ func readHeaderFormat(r *bufio.Reader) ([]byte, error) {
 				return nil, err
 			}
 			if c != ' ' {
-				return nil, fmt.Errorf(`Expected whitespace, got "0x%02X"`, c)
+				return nil, fmt.Errorf(`expected whitespace, got "0x%02X"`, c)
 			}
-			break
+			return buf, nil /* success! */
+		}
+		if len == 0 {
+			break /* failure */
 		}
 		buf = append(buf, c)
+		len--
 	}
-	return buf, nil
+
+	return nil, fmt.Errorf("header length exceeded %d bytes", 39) /* failure */
 }
 
 // golang implementation of putty C read_body
@@ -208,7 +214,7 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 			continue
 		}
 
-		header, err := readHeaderFormat(r)
+		header, err := readHeader(r)
 		if err != nil {
 			if i == 0 {
 				return nil, fmt.Errorf("No header line found in key file")
