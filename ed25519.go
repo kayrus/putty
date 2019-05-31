@@ -1,23 +1,26 @@
 package putty
 
 import (
+	"bytes"
 	"fmt"
 
 	"golang.org/x/crypto/ed25519"
 )
 
-func (k Key) readED25519(password []byte) (interface{}, error) {
-	var offset uint32
+func (k Key) readED25519() (*ed25519.PrivateKey, error) {
+	buf := bytes.NewReader(k.PublicKey)
+
 	// read the header
-	header, err := readString(k.PublicKey, &offset)
+	header, err := readString(buf)
 	if err != nil {
 		return nil, err
 	}
+
 	if header != k.Algo {
-		return nil, fmt.Errorf("Invalid header inside public key: %q: expected %q", header, k.Algo)
+		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", header, k.Algo)
 	}
 
-	pub, err := readBytes(k.PublicKey, &offset)
+	pub, err := readBytes(buf)
 	if err != nil {
 		return nil, err
 	}
@@ -27,19 +30,20 @@ func (k Key) readED25519(password []byte) (interface{}, error) {
 	}
 
 	// check public block size
-	if len(k.PublicKey) != int(offset) {
-		return nil, fmt.Errorf("Wrong public key size: got %d, expected %d", len(k.PublicKey), offset)
+	err = checkGarbage(buf, false)
+	if err != nil {
+		return nil, fmt.Errorf("wrong public key size: %s", err)
 	}
 
-	offset = 0
-	priv, err := readBytes(k.PrivateKey, &offset)
+	buf = bytes.NewReader(k.PrivateKey)
+	priv, err := readBytes(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	err = k.checkGarbage(offset)
+	err = checkGarbage(buf, k.Encryption != "none")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("wrong private key size: %s", err)
 	}
 
 	var privateKey ed25519.PrivateKey

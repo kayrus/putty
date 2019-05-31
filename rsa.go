@@ -1,67 +1,72 @@
 package putty
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"fmt"
 	"math/big"
 )
 
-func (k Key) readRSA(password []byte) (interface{}, error) {
-	var offset uint32
+func (k Key) readRSA() (*rsa.PrivateKey, error) {
+	buf := bytes.NewReader(k.PublicKey)
+
 	// read the header
-	header, err := readString(k.PublicKey, &offset)
+	header, err := readString(buf)
 	if err != nil {
 		return nil, err
 	}
+
 	if header != k.Algo {
-		return nil, fmt.Errorf("Invalid header inside public key: %q: expected %q", header, k.Algo)
+		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", header, k.Algo)
 	}
 
 	// pub exponent
-	e, err := readBigInt(k.PublicKey, &offset)
+	e, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
 	// pub modulus
-	n, err := readBigInt(k.PublicKey, &offset)
+	n, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
 	// check public block size
-	if len(k.PublicKey) != int(offset) {
-		return nil, fmt.Errorf("Wrong public key size: got %d, expected %d", len(k.PublicKey), offset)
+	err = checkGarbage(buf, false)
+	if err != nil {
+		return nil, fmt.Errorf("wrong public key size: %s", err)
 	}
 
-	offset = 0
+	buf = bytes.NewReader(k.PrivateKey)
+
 	// private exponent
-	d, err := readBigInt(k.PrivateKey, &offset)
+	d, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
 	// prime 1
-	p1, err := readBigInt(k.PrivateKey, &offset)
+	p1, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
 	// prime 2
-	p2, err := readBigInt(k.PrivateKey, &offset)
+	p2, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
 	// Qinv
-	qinv, err := readBigInt(k.PrivateKey, &offset)
+	qinv, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	err = k.checkGarbage(offset)
+	err = checkGarbage(buf, k.Encryption != "none")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("wrong private key size: %s", err)
 	}
 
 	privateKey := &rsa.PrivateKey{
@@ -80,14 +85,14 @@ func (k Key) readRSA(password []byte) (interface{}, error) {
 	}
 
 	if err = privateKey.Validate(); err != nil {
-		return nil, fmt.Errorf("Validation failed: %s", err)
+		return nil, fmt.Errorf("validation failed: %s", err)
 	}
 
 	privateKey.Precompute()
 
 	// compare source and computed Qinv
 	if qinv.Cmp(privateKey.Precomputed.Qinv) != 0 {
-		return nil, fmt.Errorf("Invalid precomputed data: %s", privateKey.Precomputed.Qinv)
+		return nil, fmt.Errorf("invalid precomputed data: %s", privateKey.Precomputed.Qinv)
 	}
 
 	return privateKey, nil

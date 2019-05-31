@@ -1,55 +1,60 @@
 package putty
 
 import (
+	"bytes"
 	"crypto/dsa"
 	"fmt"
 )
 
-func (k Key) readDSA(password []byte) (interface{}, error) {
-	var offset uint32
+func (k Key) readDSA() (*dsa.PrivateKey, error) {
+	buf := bytes.NewReader(k.PublicKey)
+
 	// read the header
-	header, err := readString(k.PublicKey, &offset)
+	header, err := readString(buf)
 	if err != nil {
 		return nil, err
 	}
+
 	if header != k.Algo {
-		return nil, fmt.Errorf("Invalid header inside public key: %q: expected %q", header, k.Algo)
+		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", header, k.Algo)
 	}
 
-	p, err := readBigInt(k.PublicKey, &offset)
+	p, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	q, err := readBigInt(k.PublicKey, &offset)
+	q, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	g, err := readBigInt(k.PublicKey, &offset)
+	g, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	pub, err := readBigInt(k.PublicKey, &offset)
+	pub, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
 	// check public block size
-	if len(k.PublicKey) != int(offset) {
-		return nil, fmt.Errorf("Wrong public key size: got %d, expected %d", len(k.PublicKey), offset)
+	err = checkGarbage(buf, false)
+	if err != nil {
+		return nil, fmt.Errorf("wrong public key size: %s", err)
 	}
 
-	offset = 0
-	priv, err := readBigInt(k.PrivateKey, &offset)
+	buf = bytes.NewReader(k.PrivateKey)
+
+	priv, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	err = k.checkGarbage(offset)
+	err = checkGarbage(buf, k.Encryption != "none")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("wrong private key size: %s", err)
 	}
 
 	privateKey := &dsa.PrivateKey{

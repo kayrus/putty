@@ -1,6 +1,7 @@
 package putty
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"fmt"
@@ -8,25 +9,27 @@ import (
 	"strings"
 )
 
-func (k Key) readECDSA(password []byte) (interface{}, error) {
-	var offset uint32
+func (k Key) readECDSA() (*ecdsa.PrivateKey, error) {
+	buf := bytes.NewReader(k.PublicKey)
+
 	// read the header
-	header, err := readString(k.PublicKey, &offset)
+	header, err := readString(buf)
 	if err != nil {
 		return nil, err
 	}
+
 	if header != k.Algo {
-		return nil, fmt.Errorf("Invalid header inside public key: %q: expected %q", header, k.Algo)
+		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", header, k.Algo)
 	}
 
-	// read ecdsa size
-	algo, err := readString(k.PublicKey, &offset)
-	if !strings.HasSuffix(k.Algo, algo) {
-		return nil, fmt.Errorf("Elliptic curves algorythm %q doesn't correspond to %q", algo, k.Algo)
+	// read ecdsa key length
+	length, err := readString(buf)
+	if !strings.HasSuffix(k.Algo, length) {
+		return nil, fmt.Errorf("elliptic curves %q key length doesn't correspond to %q", length, k.Algo)
 	}
 
 	var curve elliptic.Curve
-	switch algo {
+	switch length {
 	case "nistp256":
 		curve = elliptic.P256()
 	case "nistp384":
@@ -34,36 +37,39 @@ func (k Key) readECDSA(password []byte) (interface{}, error) {
 	case "nistp521":
 		curve = elliptic.P521()
 	default:
-		return nil, fmt.Errorf("Unsupported elliptic curves algorythm %q", k.Algo)
+		return nil, fmt.Errorf("unsupported elliptic curves key length %q", length)
 	}
 
-	qBytes, err := readBytes(k.PublicKey, &offset)
+	qBytes, err := readBytes(buf)
 	if err != nil {
 		return nil, err
 	}
+
 	xLength := len(qBytes) / 2
 	x := new(big.Int).SetBytes(qBytes[1 : xLength+1])
 	y := new(big.Int).SetBytes(qBytes[xLength+1:])
 
 	// check public block size
-	if len(k.PublicKey) != int(offset) {
-		return nil, fmt.Errorf("Wrong public key size: got %d, expected %d", len(k.PublicKey), offset)
+	err = checkGarbage(buf, false)
+	if err != nil {
+		return nil, fmt.Errorf("wrong public key size: %s", err)
 	}
 
-	offset = 0
-	priv, err := readBigInt(k.PrivateKey, &offset)
+	buf = bytes.NewReader(k.PrivateKey)
+
+	priv, err := readBigInt(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	err = k.checkGarbage(offset)
+	err = checkGarbage(buf, k.Encryption != "none")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("wrong private key size: %s", err)
 	}
 
 	curveOrder := curve.Params().N
 	if priv.Cmp(curveOrder) >= 0 {
-		return nil, fmt.Errorf("putty: invalid elliptic curve private key value")
+		return nil, fmt.Errorf("invalid elliptic curve private key value")
 	}
 
 	// validate X and Y values
@@ -71,10 +77,10 @@ func (k Key) readECDSA(password []byte) (interface{}, error) {
 	copy(pKey[len(pKey)-len(priv.Bytes()):], priv.Bytes())
 	xC, yC := curve.ScalarBaseMult(pKey)
 	if x.Cmp(xC) != 0 {
-		return nil, fmt.Errorf("calculated X doesn't correspond to public")
+		return nil, fmt.Errorf("calculated X doesn't correspond to public one")
 	}
 	if y.Cmp(yC) != 0 {
-		return nil, fmt.Errorf("calculated Y doesn't correspond to public")
+		return nil, fmt.Errorf("calculated Y doesn't correspond to public one")
 	}
 
 	privateKey := &ecdsa.PrivateKey{

@@ -12,9 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/big"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -30,6 +28,7 @@ type Key struct {
 	Encryption  string
 	PrivateMac  string
 	PrivateHash string
+	decrypted   bool
 }
 
 var fieldsOrder = []string{
@@ -44,7 +43,7 @@ var fieldsOrder = []string{
 
 // LoadFromFile reads PuTTY key and loads its contents into the struct
 func (k *Key) LoadFromFile(path string) error {
-	f, err := os.Open(filepath.FromSlash(path))
+	f, err := os.Open(path)
 	if err != nil {
 		return err
 	}
@@ -102,7 +101,7 @@ func New(b []byte) (*Key, error) {
 // supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
 func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
 	if k.Encryption != "none" && len(password) == 0 {
-		return nil, fmt.Errorf("Expect password")
+		return nil, fmt.Errorf("expecting password")
 	}
 
 	err := k.decrypt(password)
@@ -112,13 +111,15 @@ func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
 
 	switch k.Algo {
 	case "ssh-rsa":
-		return k.readRSA(password)
-	case "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521":
-		return k.readECDSA(password)
+		return k.readRSA()
+	case "ecdsa-sha2-nistp256",
+		"ecdsa-sha2-nistp384",
+		"ecdsa-sha2-nistp521":
+		return k.readECDSA()
 	case "ssh-dss":
-		return k.readDSA(password)
+		return k.readDSA()
 	case "ssh-ed25519":
-		return k.readED25519(password)
+		return k.readED25519()
 	}
 
 	return nil, fmt.Errorf("unsupported key type %q", k.Algo)
@@ -135,7 +136,7 @@ func readHeader(r *bufio.Reader) ([]byte, error) {
 			return nil, err
 		}
 		if c == '\n' || c == '\r' {
-			return nil, fmt.Errorf("Unexpected newlines") /* failure */
+			return nil, fmt.Errorf("unexpected newlines") /* failure */
 		}
 		if c == ':' {
 			c, err = r.ReadByte()
@@ -143,7 +144,7 @@ func readHeader(r *bufio.Reader) ([]byte, error) {
 				return nil, err
 			}
 			if c != ' ' {
-				return nil, fmt.Errorf(`Expected whitespace, got "0x%02X"`, c)
+				return nil, fmt.Errorf(`expected whitespace, got "0x%02X"`, c)
 			}
 			return buf, nil /* success! */
 		}
@@ -154,7 +155,7 @@ func readHeader(r *bufio.Reader) ([]byte, error) {
 		len--
 	}
 
-	return nil, fmt.Errorf("Header length exceeded %d bytes", 39) /* failure */
+	return nil, fmt.Errorf("header length exceeded %d bytes", 39) /* failure */
 }
 
 // golang implementation of putty C read_body
@@ -200,7 +201,7 @@ func readBlob(r *bufio.Reader, nlines int) ([]byte, error) {
 		}
 		linelen := len(line)
 		if linelen%4 != 0 || linelen > 64 {
-			return nil, fmt.Errorf("Invalid blob string length")
+			return nil, fmt.Errorf("invalid blob string length")
 		}
 		buf = append(buf, line...)
 	}
@@ -223,7 +224,7 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 		header, err := readHeader(r)
 		if err != nil {
 			if i == 0 {
-				return nil, fmt.Errorf("No header line found in key file: %s", err)
+				return nil, fmt.Errorf("no header line found in key file: %s", err)
 			}
 			return nil, err
 		}
@@ -235,11 +236,11 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 				switch v {
 				case fmt.Sprintf("%s%d", h, 1):
 					oldFmt = true
-					return nil, fmt.Errorf("PuTTY key format too old")
+					return nil, fmt.Errorf("PuTTY key format is too old")
 				case fmt.Sprintf("%s%d", h, 2):
 					oldFmt = false
 				default:
-					return nil, fmt.Errorf("PuTTY key format too new")
+					return nil, fmt.Errorf("PuTTY key format is too new")
 				}
 			}
 
@@ -259,7 +260,7 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 				case "ecdsa-sha2-nistp521":
 				case "ssh-ed25519":
 				default:
-					return nil, fmt.Errorf("Invalid key algorithm: %s", b)
+					return nil, fmt.Errorf("invalid key algorithm: %s", b)
 				}
 				k.Algo = string(b)
 			case 1:
@@ -268,7 +269,7 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 				case "none":
 				case "aes256-cbc":
 				default:
-					return nil, fmt.Errorf("Invalid encryption format: %s", b)
+					return nil, fmt.Errorf("invalid encryption format: %s", b)
 				}
 
 				k.Encryption = string(b)
@@ -281,16 +282,16 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 					return nil, err
 				}
 				if n >= MaxKeyBlobLines {
-					return nil, fmt.Errorf("Invalid number of lines: %d", n)
+					return nil, fmt.Errorf("invalid number of lines: %d", n)
 				}
 				bs, err := readBlob(r, n)
 				if err != nil {
-					return nil, fmt.Errorf(`Failed to read blob data for %q: %s`, v, err)
+					return nil, fmt.Errorf("failed to read blob data for %q: %s", v, err)
 				}
 
 				v, err := base64.StdEncoding.DecodeString(string(bs))
 				if err != nil {
-					return nil, fmt.Errorf("base64 decode error for the %s header", h)
+					return nil, fmt.Errorf("%q header decode error: %s", h, err)
 				}
 				if i == 3 {
 					k.PublicKey = v
@@ -304,13 +305,13 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 				// read signature
 				k.PrivateMac = string(b)
 			default:
-				return nil, fmt.Errorf("Index is out of range")
+				return nil, fmt.Errorf("index is out of range")
 			}
 		} else {
 			if i == 0 {
-				return nil, fmt.Errorf("Not a PuTTY SSH-2 private key")
+				return nil, fmt.Errorf("not a PuTTY SSH-2 private key")
 			}
-			return nil, fmt.Errorf(`Unexpected header %q, expecting %q`, v, h)
+			return nil, fmt.Errorf("unexpected header %q, expecting %q", v, h)
 		}
 	}
 
@@ -326,8 +327,6 @@ func decryptCBC(password, ciphertext []byte) ([]byte, error) {
 		return nil, fmt.Errorf("ciphertext is not a multiple of the block size")
 	}
 
-	var block cipher.Block
-	var err error
 	var seq int
 	var k []byte
 
@@ -344,12 +343,14 @@ func decryptCBC(password, ciphertext []byte) ([]byte, error) {
 	}
 
 	// initialize AES 256 bit cipher
-	if block, err = aes.NewCipher(k[:32]); err != nil {
+	block, err := aes.NewCipher(k[:32])
+	if err != nil {
 		return nil, err
 	}
 
 	// zero IV
-	cbc := cipher.NewCBCDecrypter(block, make([]byte, aes.BlockSize))
+	iv := make([]byte, aes.BlockSize)
+	cbc := cipher.NewCBCDecrypter(block, iv)
 
 	// decrypt
 	cbc.CryptBlocks(ciphertext, ciphertext)
@@ -357,9 +358,10 @@ func decryptCBC(password, ciphertext []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// ValidateHMAC validates PuTTY key HMAC
-func (k Key) ValidateHMAC(password []byte) error {
+// validateHMAC validates PuTTY key HMAC
+func (k Key) validateHMAC(password []byte) error {
 	payload := bytes.NewBuffer(nil)
+
 	binary.Write(payload, binary.BigEndian, uint32(len(k.Algo)))
 	payload.WriteString(k.Algo)
 	binary.Write(payload, binary.BigEndian, uint32(len(k.Encryption)))
@@ -382,83 +384,30 @@ func (k Key) ValidateHMAC(password []byte) error {
 
 	mac := hex.EncodeToString(hmacsha1.Sum(nil))
 	if mac != k.PrivateMac {
-		return fmt.Errorf("Calculated MAC %q doesn't correspond to %q", mac, k.PrivateMac)
+		return fmt.Errorf("calculated HMAC %q doesn't correspond to %q", mac, k.PrivateMac)
 	}
 
 	return nil
 }
 
-func readBytes(src []byte, offset *uint32) ([]byte, error) {
-	var l uint32
-	uint32size := uint32(4)
-	sl := uint32(len(src))
-
-	if *offset+uint32size > sl {
-		return nil, fmt.Errorf("cannot detect element size: %d index out of range %d", *offset+l, sl)
-	}
-
-	err := binary.Read(bytes.NewBuffer(src[*offset:*offset+uint32size]), binary.BigEndian, &l)
-	if err != nil {
-		return nil, err
-	}
-
-	*offset += uint32size
-
-	if *offset+l > sl {
-		return nil, fmt.Errorf("cannot read element: %d index out of range %d", *offset+l, sl)
-	}
-
-	*offset += l
-
-	return src[*offset-l : *offset], nil
-}
-
-func readString(src []byte, offset *uint32) (string, error) {
-	b, err := readBytes(src, offset)
-	if err != nil {
-		return "", err
-	}
-
-	return string(b), nil
-}
-
-func readBigInt(src []byte, offset *uint32) (*big.Int, error) {
-	b, err := readBytes(src, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	return new(big.Int).SetBytes(b), nil
-}
-
+// decrypt decrypts the key, when it is encrypted. and validates its signature
 func (k *Key) decrypt(password []byte) (err error) {
 	// decrypt the key, when it is encrypted
-	if k.Encryption != "none" {
+	if !k.decrypted && k.Encryption != "none" {
 		v, err := decryptCBC(password, k.PrivateKey)
 		if err != nil {
 			return err
 		}
+
 		k.PrivateKey = v
 	}
 
+	k.decrypted = true
+
 	// validate key signature
-	err = k.ValidateHMAC(password)
+	err = k.validateHMAC(password)
 	if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func (k Key) checkGarbage(offset uint32) error {
-	if k.Encryption != "none" {
-		// normalize the size of the decrypted part (should be % aes.BlockSize)
-		offset = offset + aes.BlockSize - offset&(aes.BlockSize-1)
-	}
-
-	// check private block size
-	if len(k.PrivateKey) != int(offset) {
-		return fmt.Errorf("Wrong private key size: got %d, expected %d", len(k.PrivateKey), offset)
 	}
 
 	return nil
