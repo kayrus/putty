@@ -7,7 +7,70 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"reflect"
 )
+
+func unmarshal(data []byte, val interface{}, enc bool) error {
+	v := reflect.ValueOf(val).Elem()
+	buf := bytes.NewReader(data)
+
+	err := parseField(v, buf)
+	if err != nil {
+		return err
+	}
+
+	// check key block size
+	err = checkGarbage(buf, enc)
+	if err != nil {
+		return fmt.Errorf("wrong key size: %s", err)
+	}
+
+	return nil
+}
+
+func parseField(v reflect.Value, src *bytes.Reader) error {
+	fieldType := v.Type()
+
+	switch fieldType.Kind() {
+	case reflect.Struct:
+		for i := 0; i < fieldType.NumField(); i++ {
+			if fieldType.Field(i).PkgPath != "" {
+				return fmt.Errorf("struct contains unexported fields")
+			}
+
+			err := parseField(v.Field(i), src)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	switch fieldType {
+	case reflect.TypeOf(string("")):
+		parsedString, err := readString(src)
+		if err != nil {
+			return err
+		}
+		v.Set(reflect.ValueOf(parsedString))
+	case reflect.TypeOf([]byte(nil)):
+		parsedBytes, err := readBytes(src)
+		if err != nil {
+			return err
+		}
+		v.Set(reflect.ValueOf(parsedBytes))
+	case reflect.TypeOf(new(big.Int)):
+		parsedInt, err := readBigInt(src)
+		if err != nil {
+			return err
+		}
+		v.Set(reflect.ValueOf(parsedInt))
+	default:
+		return fmt.Errorf("unknown type %s", fieldType)
+	}
+
+	return nil
+}
 
 func readBytes(src *bytes.Reader) ([]byte, error) {
 	var len uint32

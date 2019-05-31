@@ -1,70 +1,42 @@
 package putty
 
 import (
-	"bytes"
 	"crypto/dsa"
 	"fmt"
+	"math/big"
 )
 
 func (k Key) readDSA() (*dsa.PrivateKey, error) {
-	buf := bytes.NewReader(k.PublicKey)
-
-	// read the header
-	header, err := readString(buf)
+	var pub struct {
+		Header string
+		P      *big.Int
+		Q      *big.Int
+		G      *big.Int
+		Pub    *big.Int
+	}
+	err := unmarshal(k.PublicKey, &pub, false)
 	if err != nil {
 		return nil, err
 	}
 
-	if header != k.Algo {
-		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", header, k.Algo)
+	if pub.Header != k.Algo {
+		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", pub.Header, k.Algo)
 	}
 
-	p, err := readBigInt(buf)
+	var priv *big.Int
+	err = unmarshal(k.PrivateKey, &priv, k.Encryption != "none")
 	if err != nil {
 		return nil, err
-	}
-
-	q, err := readBigInt(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	g, err := readBigInt(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	pub, err := readBigInt(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	// check public block size
-	err = checkGarbage(buf, false)
-	if err != nil {
-		return nil, fmt.Errorf("wrong public key size: %s", err)
-	}
-
-	buf = bytes.NewReader(k.PrivateKey)
-
-	priv, err := readBigInt(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	err = checkGarbage(buf, k.Encryption != "none")
-	if err != nil {
-		return nil, fmt.Errorf("wrong private key size: %s", err)
 	}
 
 	privateKey := &dsa.PrivateKey{
 		PublicKey: dsa.PublicKey{
 			Parameters: dsa.Parameters{
-				P: p,
-				Q: q,
-				G: g,
+				P: pub.P,
+				Q: pub.Q,
+				G: pub.G,
 			},
-			Y: pub,
+			Y: pub.Pub,
 		},
 		X: priv,
 	}

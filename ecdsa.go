@@ -1,7 +1,6 @@
 package putty
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"fmt"
@@ -10,26 +9,36 @@ import (
 )
 
 func (k Key) readECDSA() (*ecdsa.PrivateKey, error) {
-	buf := bytes.NewReader(k.PublicKey)
-
-	// read the header
-	header, err := readString(buf)
+	var pub struct {
+		Header string
+		Length string
+		Bytes  []byte
+	}
+	err := unmarshal(k.PublicKey, &pub, false)
 	if err != nil {
 		return nil, err
 	}
 
-	if header != k.Algo {
-		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", header, k.Algo)
+	if pub.Header != k.Algo {
+		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", pub.Header, k.Algo)
 	}
 
-	// read ecdsa key length
-	length, err := readString(buf)
-	if !strings.HasSuffix(k.Algo, length) {
-		return nil, fmt.Errorf("elliptic curves %q key length doesn't correspond to %q", length, k.Algo)
+	if !strings.HasSuffix(k.Algo, pub.Length) {
+		return nil, fmt.Errorf("elliptic curves %q key length doesn't correspond to %q", pub.Length, k.Algo)
 	}
+
+	var priv *big.Int
+	err = unmarshal(k.PrivateKey, &priv, k.Encryption != "none")
+	if err != nil {
+		return nil, err
+	}
+
+	length := len(pub.Bytes) / 2
+	x := new(big.Int).SetBytes(pub.Bytes[1 : length+1])
+	y := new(big.Int).SetBytes(pub.Bytes[length+1:])
 
 	var curve elliptic.Curve
-	switch length {
+	switch pub.Length {
 	case "nistp256":
 		curve = elliptic.P256()
 	case "nistp384":
@@ -37,34 +46,7 @@ func (k Key) readECDSA() (*ecdsa.PrivateKey, error) {
 	case "nistp521":
 		curve = elliptic.P521()
 	default:
-		return nil, fmt.Errorf("unsupported elliptic curves key length %q", length)
-	}
-
-	qBytes, err := readBytes(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	xLength := len(qBytes) / 2
-	x := new(big.Int).SetBytes(qBytes[1 : xLength+1])
-	y := new(big.Int).SetBytes(qBytes[xLength+1:])
-
-	// check public block size
-	err = checkGarbage(buf, false)
-	if err != nil {
-		return nil, fmt.Errorf("wrong public key size: %s", err)
-	}
-
-	buf = bytes.NewReader(k.PrivateKey)
-
-	priv, err := readBigInt(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	err = checkGarbage(buf, k.Encryption != "none")
-	if err != nil {
-		return nil, fmt.Errorf("wrong private key size: %s", err)
+		return nil, fmt.Errorf("unsupported elliptic curves key length %q", pub.Length)
 	}
 
 	curveOrder := curve.Params().N
