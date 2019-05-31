@@ -119,8 +119,7 @@ func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
 }
 
 // golang implementation of putty C read_header
-func readHeader(r *bufio.Reader) ([]byte, error) {
-	var len = 39
+func readHeaderFormat(r *bufio.Reader) ([]byte, error) {
 	var buf []byte
 
 	for {
@@ -139,15 +138,11 @@ func readHeader(r *bufio.Reader) ([]byte, error) {
 			if c != ' ' {
 				return nil, fmt.Errorf(`Expected whitespace, got "0x%02X"`, c)
 			}
-			return buf, nil /* success! */
-		}
-		if len == 0 {
-			return nil, fmt.Errorf("Header was not found") /* failure */
+			break
 		}
 		buf = append(buf, c)
-		len--
 	}
-	return nil, fmt.Errorf("Loop is over") /* failure */
+	return buf, nil
 }
 
 // golang implementation of putty C read_body
@@ -213,7 +208,7 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 			continue
 		}
 
-		header, err := readHeader(r)
+		header, err := readHeaderFormat(r)
 		if err != nil {
 			if i == 0 {
 				return nil, fmt.Errorf("No header line found in key file")
