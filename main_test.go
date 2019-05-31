@@ -147,35 +147,6 @@ Comment: a@b`
 
 }
 
-func checkLoadingFromByteSlice(keyContent string, t *testing.T) {
-
-	key := &Key{}
-	err := key.Load([]byte(keyContent))
-	if err != nil {
-		t.Errorf("error loading Key fields")
-	}
-
-	expectedAlgorithmInHeader := "ssh-rsa"
-	if key.Algo != expectedAlgorithmInHeader {
-		t.Errorf("got=[%s], expected=[%s]", key.Algo, expectedAlgorithmInHeader)
-	}
-
-	expectedEncryption := "none"
-	if key.Encryption != expectedEncryption {
-		t.Errorf("got=[%s], expected=[%s]", key.Encryption, expectedEncryption)
-	}
-
-	expectedComment := "a@b"
-	if key.Comment != expectedComment {
-		t.Errorf("got=[%s], expected=[%s]", key.Comment, expectedComment)
-	}
-
-	expectedPrivateMAC := "3c3a9bd98e8e912f6163be95321676b6103aaed8"
-	if key.PrivateMac != expectedPrivateMAC {
-		t.Errorf("got=[%s], expected=[%s]", key.PrivateMac, expectedPrivateMAC)
-	}
-}
-
 func TestKey_Load(t *testing.T) {
 	key := &Key{}
 	err := key.Load([]byte(keyContent))
