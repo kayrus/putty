@@ -186,8 +186,6 @@ func readBody(r *bufio.Reader) ([]byte, error) {
 		}
 		buf = append(buf, c)
 	}
-
-	return buf, nil
 }
 
 // golang implementation of putty C read_blob

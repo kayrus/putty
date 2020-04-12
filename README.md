@@ -1,5 +1,6 @@
 # putty
-Go package to parse PuTTY private key formats
+
+Go package to parse PuTTY private key formats. Go 1.13 or above is required.
 
 ## Example
 
@@ -7,8 +8,9 @@ Go package to parse PuTTY private key formats
 package main
 
 import (
-	"github.com/kayrus/putty"
 	"log"
+
+	"github.com/kayrus/putty"
 )
 
 func main() {

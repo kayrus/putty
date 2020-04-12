@@ -1,9 +1,8 @@
 package putty
 
 import (
+	"crypto/ed25519"
 	"fmt"
-
-	"golang.org/x/crypto/ed25519"
 )
 
 func (k Key) readED25519() (*ed25519.PrivateKey, error) {
