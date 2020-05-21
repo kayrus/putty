@@ -317,3 +317,11 @@ func TestParseRawPrivateKey(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadFromUrandom(t *testing.T) {
+	_, err := NewFromFile("/dev/urandom")
+	if err == nil {
+		t.Errorf("reading from /dev/urandom must return an error")
+	}
+	t.Logf("%v", err)
+}

@@ -73,10 +73,9 @@ func parseField(v reflect.Value, src *bytes.Reader) error {
 }
 
 func readBytes(src *bytes.Reader) ([]byte, error) {
-	var len uint32
-
+	var length uint32
 	// read 4 bytes (uint32 size) of the next element size
-	err := binary.Read(io.LimitReader(src, int64(4)), binary.BigEndian, &len)
+	err := binary.Read(src, binary.BigEndian, &length)
 	if err != nil {
 		return nil, err
 	}
@@ -88,18 +87,18 @@ func readBytes(src *bytes.Reader) ([]byte, error) {
 	}
 
 	// check next element size
-	if int64(len)+pos > src.Size() {
-		return nil, fmt.Errorf("the element length %d is out of range", len)
+	if int64(length)+pos > src.Size() {
+		return nil, fmt.Errorf("the element length %d is out of range", length)
 	}
 
-	buf := make([]byte, len)
+	buf := make([]byte, length)
 	n, err := io.ReadFull(src, buf)
 	if err != nil {
 		return nil, err
 	}
 
-	if uint32(n) != len {
-		return nil, fmt.Errorf("expected to read %d, but read %d", len, n)
+	if n != int(length) {
+		return nil, fmt.Errorf("expected to read %d, but read %d", length, n)
 	}
 
 	return buf, nil

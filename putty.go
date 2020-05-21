@@ -17,8 +17,12 @@ import (
 	"strings"
 )
 
-const MaxKeyBlobSize = 262144
-const MaxKeyBlobLines = (MaxKeyBlobSize / 48)
+// const from putty
+const maxKeyBlobSize = 262144
+const maxKeyBlobLines = (maxKeyBlobSize / 48)
+
+// max header length from putty read_header
+const maxHeaderLength = 39
 
 type Key struct {
 	Algo        string
@@ -41,6 +45,12 @@ var fieldsOrder = []string{
 	"Private-MAC",
 }
 
+type reader interface {
+	Read([]byte) (int, error)
+	ReadByte() (byte, error)
+	UnreadByte() error
+}
+
 // LoadFromFile reads PuTTY key and loads its contents into the struct
 func (k *Key) LoadFromFile(path string) error {
 	f, err := os.Open(path)
@@ -61,9 +71,7 @@ func (k *Key) LoadFromFile(path string) error {
 
 // Load loads PuTTY key bytes into the struct
 func (k *Key) Load(b []byte) error {
-	r := bytes.NewReader(b)
-
-	v, err := decodeFields(bufio.NewReader(r))
+	v, err := decodeFields(bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -126,8 +134,8 @@ func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
 }
 
 // golang implementation of putty C read_header
-func readHeader(r *bufio.Reader) ([]byte, error) {
-	var len = 39
+func readHeader(r reader) ([]byte, error) {
+	var length = maxHeaderLength
 	var buf []byte
 
 	for {
@@ -148,18 +156,18 @@ func readHeader(r *bufio.Reader) ([]byte, error) {
 			}
 			return buf, nil /* success! */
 		}
-		if len == 0 {
+		if length == 0 {
 			break /* failure */
 		}
 		buf = append(buf, c)
-		len--
+		length--
 	}
 
-	return nil, fmt.Errorf("header length exceeded %d bytes", 39) /* failure */
+	return nil, fmt.Errorf("header length exceeded %d bytes", maxHeaderLength) /* failure */
 }
 
 // golang implementation of putty C read_body
-func readBody(r *bufio.Reader) ([]byte, error) {
+func readBody(r reader) ([]byte, error) {
 	var buf []byte
 
 	for {
@@ -189,7 +197,7 @@ func readBody(r *bufio.Reader) ([]byte, error) {
 }
 
 // golang implementation of putty C read_blob
-func readBlob(r *bufio.Reader, nlines int) ([]byte, error) {
+func readBlob(r reader, nlines int) ([]byte, error) {
 	var buf []byte
 
 	for i := 0; i < nlines; i++ {
@@ -208,7 +216,7 @@ func readBlob(r *bufio.Reader, nlines int) ([]byte, error) {
 }
 
 // Decode fields in the order defined by "fieldsOrder"
-func decodeFields(r *bufio.Reader) (*Key, error) {
+func decodeFields(r reader) (*Key, error) {
 	var oldFmt bool
 
 	k := new(Key)
@@ -279,7 +287,7 @@ func decodeFields(r *bufio.Reader) (*Key, error) {
 				if err != nil {
 					return nil, err
 				}
-				if n >= MaxKeyBlobLines {
+				if n >= maxKeyBlobLines {
 					return nil, fmt.Errorf("invalid number of lines: %d", n)
 				}
 				bs, err := readBlob(r, n)
@@ -358,19 +366,6 @@ func decryptCBC(password, ciphertext []byte) ([]byte, error) {
 
 // validateHMAC validates PuTTY key HMAC
 func (k Key) validateHMAC(password []byte) error {
-	payload := bytes.NewBuffer(nil)
-
-	binary.Write(payload, binary.BigEndian, uint32(len(k.Algo)))
-	payload.WriteString(k.Algo)
-	binary.Write(payload, binary.BigEndian, uint32(len(k.Encryption)))
-	payload.WriteString(k.Encryption)
-	binary.Write(payload, binary.BigEndian, uint32(len(k.Comment)))
-	payload.WriteString(k.Comment)
-	binary.Write(payload, binary.BigEndian, uint32(len(k.PublicKey)))
-	payload.Write(k.PublicKey)
-	binary.Write(payload, binary.BigEndian, uint32(len(k.PrivateKey)))
-	payload.Write(k.PrivateKey)
-
 	sha1sum := sha1.New()
 	sha1sum.Write([]byte("putty-private-key-file-mac-key"))
 	if len(password) > 0 {
@@ -378,7 +373,17 @@ func (k Key) validateHMAC(password []byte) error {
 	}
 
 	hmacsha1 := hmac.New(sha1.New, sha1sum.Sum(nil))
-	hmacsha1.Write(payload.Bytes())
+
+	binary.Write(hmacsha1, binary.BigEndian, uint32(len(k.Algo)))
+	hmacsha1.Write([]byte(k.Algo))
+	binary.Write(hmacsha1, binary.BigEndian, uint32(len(k.Encryption)))
+	hmacsha1.Write([]byte(k.Encryption))
+	binary.Write(hmacsha1, binary.BigEndian, uint32(len(k.Comment)))
+	hmacsha1.Write([]byte(k.Comment))
+	binary.Write(hmacsha1, binary.BigEndian, uint32(len(k.PublicKey)))
+	hmacsha1.Write(k.PublicKey)
+	binary.Write(hmacsha1, binary.BigEndian, uint32(len(k.PrivateKey)))
+	hmacsha1.Write(k.PrivateKey)
 
 	mac := hex.EncodeToString(hmacsha1.Sum(nil))
 	if mac != k.PrivateMac {
