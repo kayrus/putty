@@ -318,6 +318,20 @@ func TestParseRawPrivateKey(t *testing.T) {
 	}
 }
 
+func TestParseRawPublicKey(t *testing.T) {
+	for _, encryptedKey := range keysWithPassword {
+		key, err := New([]byte(encryptedKey.content))
+		if err != nil {
+			t.Errorf("error loading key")
+		}
+
+		_, err = key.ParseRawPublicKey()
+		if err != nil {
+			t.Errorf("error decrypting key")
+		}
+	}
+}
+
 func TestLoadFromUrandom(t *testing.T) {
 	_, err := NewFromFile("/dev/urandom")
 	if err == nil {

@@ -6,7 +6,7 @@ import (
 	"math/big"
 )
 
-func (k Key) readRSA() (*rsa.PrivateKey, error) {
+func (k Key) readRSAPublicKey() (*rsa.PublicKey, error) {
 	var pub struct {
 		Header string   // header
 		E      *big.Int // pub exponent
@@ -21,6 +21,20 @@ func (k Key) readRSA() (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", pub.Header, k.Algo)
 	}
 
+	publicKey := &rsa.PublicKey{
+		E: int(pub.E.Int64()),
+		N: pub.N,
+	}
+
+	return publicKey, nil
+}
+
+func (k Key) readRSAPrivateKey() (*rsa.PrivateKey, error) {
+	publicKey, err := k.readRSAPublicKey()
+	if err != nil {
+		return nil, err
+	}
+
 	var priv struct {
 		D    *big.Int // private exponent
 		P1   *big.Int // prime 1
@@ -33,11 +47,8 @@ func (k Key) readRSA() (*rsa.PrivateKey, error) {
 	}
 
 	privateKey := &rsa.PrivateKey{
-		PublicKey: rsa.PublicKey{
-			E: int(pub.E.Int64()),
-			N: pub.N,
-		},
-		D: priv.D,
+		PublicKey: *publicKey,
+		D:         priv.D,
 		Primes: []*big.Int{
 			priv.P1,
 			priv.P2,

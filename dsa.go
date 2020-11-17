@@ -6,7 +6,7 @@ import (
 	"math/big"
 )
 
-func (k Key) readDSA() (*dsa.PrivateKey, error) {
+func (k Key) readDSAPublicKey() (*dsa.PublicKey, error) {
 	var pub struct {
 		Header string
 		P      *big.Int
@@ -23,6 +23,23 @@ func (k Key) readDSA() (*dsa.PrivateKey, error) {
 		return nil, fmt.Errorf("invalid header inside public key: %q: expected %q", pub.Header, k.Algo)
 	}
 
+	publicKey := &dsa.PublicKey{
+		Parameters: dsa.Parameters{
+			P: pub.P,
+			Q: pub.Q,
+			G: pub.G,
+		},
+	}
+
+	return publicKey, nil
+}
+
+func (k Key) readDSAPrivateKey() (*dsa.PrivateKey, error) {
+	publicKey, err := k.readDSAPublicKey()
+	if err != nil {
+		return nil, err
+	}
+
 	var priv *big.Int
 	err = unmarshal(k.PrivateKey, &priv, k.Encryption != "none")
 	if err != nil {
@@ -30,15 +47,8 @@ func (k Key) readDSA() (*dsa.PrivateKey, error) {
 	}
 
 	privateKey := &dsa.PrivateKey{
-		PublicKey: dsa.PublicKey{
-			Parameters: dsa.Parameters{
-				P: pub.P,
-				Q: pub.Q,
-				G: pub.G,
-			},
-			Y: pub.Pub,
-		},
-		X: priv,
+		PublicKey: *publicKey,
+		X:         priv,
 	}
 
 	return privateKey, nil

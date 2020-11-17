@@ -119,15 +119,34 @@ func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
 
 	switch k.Algo {
 	case "ssh-rsa":
-		return k.readRSA()
+		return k.readRSAPrivateKey()
 	case "ecdsa-sha2-nistp256",
 		"ecdsa-sha2-nistp384",
 		"ecdsa-sha2-nistp521":
-		return k.readECDSA()
+		return k.readECDSAPrivateKey()
 	case "ssh-dss":
-		return k.readDSA()
+		return k.readDSAPrivateKey()
 	case "ssh-ed25519":
-		return k.readED25519()
+		return k.readED25519PrivateKey()
+	}
+
+	return nil, fmt.Errorf("unsupported key type %q", k.Algo)
+}
+
+// ParseRawPublicKey returns a public key from a PuTTY encoded private key. It
+// supports the same key types as ParseRawPrivateKey, and will work even if the private part is encrypted
+func (k *Key) ParseRawPublicKey() (interface{}, error) {
+	switch k.Algo {
+	case "ssh-rsa":
+		return k.readRSAPublicKey()
+	case "ecdsa-sha2-nistp256",
+		"ecdsa-sha2-nistp384",
+		"ecdsa-sha2-nistp521":
+		return k.readECDSAPublicKey()
+	case "ssh-dss":
+		return k.readDSAPublicKey()
+	case "ssh-ed25519":
+		return k.readED25519PublicKey()
 	}
 
 	return nil, fmt.Errorf("unsupported key type %q", k.Algo)
