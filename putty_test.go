@@ -2,6 +2,13 @@ package putty
 
 import (
 	"bufio"
+	"crypto/dsa"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rsa"
+	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -21,12 +28,97 @@ ACEAgd1SYGV2aEEMQaMGQ4CnjQeiAuZL4z7OVTBTrtGap1A=
 Private-MAC: 3c3a9bd98e8e912f6163be95321676b6103aaed8`
 )
 
-var (
-	keysWithPassword = []struct {
-		content          string
-		encryptionMethod string
-		password         string
-	}{
+type testKeyStruct struct {
+	content  string
+	keyType  string
+	password []byte
+	data     interface{}
+}
+
+var keysWithPassword []testKeyStruct
+
+func init() {
+	dsaP, _ := new(big.Int).SetString("24594562591148674955193935530570345698901351673115514528850649708585499534112253610063676118481975411425473555170006092361522567122668561166623600473338556612006266904734584520036147901134857358698958891337509539840397725282694053771143291815546131811329906604343196079953386684245940025973122612572623286633577598913988451237865018093641985572774958578455846290160433526300387888405060531817175364632586536057657667465336393991275791245035916446578505777445647787250353018737479407834863073244575186642619947916919893272642340891779424822336371882593459817314757590432914231351510355118493996526096415995901691818803", 10)
+	dsaQ, _ := new(big.Int).SetString("1312341038342200669065145856275284506462910232321", 10)
+	dsaG, _ := new(big.Int).SetString("10425077490021224161949597305729551331605748188798282297372931992795679890533253191063851317774978177087779792313915641092243367750810044491724052104552811663852087628398546468515716758181439573025733351734712399668145973555365229762144691787113025266081984796617297840056005672890746877901282842489089172477827905313991095991925328443157735824309346126295789077407934223177070081244875098862033746719850130865721824549860620047834045903705777084948010434133428686539181823369981863045754945910010043595598173308172093626744719830300869248812222241319999935223546737700715574148072183411259304981353771500265250175443", 10)
+	dsaY, _ := new(big.Int).SetString("21510646617536686970256301962113811051397758140195234090460194930132038549590435491244976282798444518550747368745775628925406182046673364658952325925163405035564468078377990474727147614887717599605417338252450798540320708163986733717533122922047528385190165550782351240652858387386313772718064917332808821631800782888953175646687372284116533887062414252814237371365623131439296930507968790703639461812161116142375599044257673213057247217469031149630486664054488124298907613896781452876902366817780475672748311909538129167693858987730507482184614249830095325205465687346021497797754795120320928445244272698895964451195", 10)
+	dsaX, _ := new(big.Int).SetString("189340186621154930140334018913803473857861157014", 10)
+	dsaKey := &dsa.PrivateKey{
+		PublicKey: dsa.PublicKey{
+			Parameters: dsa.Parameters{
+				P: dsaP,
+				Q: dsaQ,
+				G: dsaG,
+			},
+			Y: dsaY,
+		},
+		X: dsaX,
+	}
+
+	rsaN, _ := new(big.Int).SetString("8520746803670459111964735264302364864406603319706722291382206884740918720975597863537943632699025487407803452238155180426869496108764232229987590678390127", 10)
+	rsaD, _ := new(big.Int).SetString("4375518628911857381819728919506619795235823326335884419898971102975066370230617515168937792367348653574766837811133440634746446236118948255351252506463093", 10)
+	rsaPrimeA, _ := new(big.Int).SetString("96613721054719714377323864891194620466947836547220293140459277308802606823211", 10)
+	rsaPrimeB, _ := new(big.Int).SetString("88193961589001532442890792050520827586269248973933145286873718573717401086157", 10)
+	rsaDp, _ := new(big.Int).SetString("13055908250637799240178900660972246009047004938813553127089091528216568489623", 10)
+	rsaDq, _ := new(big.Int).SetString("26219826418351806942481046285289975768890857803061205355557051467861930052641", 10)
+	rsaQinv, _ := new(big.Int).SetString("90518500249146741801779803717894162115106259819578908134048653601260005033042", 10)
+	rsaKey := &rsa.PrivateKey{
+		PublicKey: rsa.PublicKey{
+			N: rsaN,
+			E: 37,
+		},
+		D: rsaD,
+		Primes: []*big.Int{
+			rsaPrimeA,
+			rsaPrimeB,
+		},
+		Precomputed: rsa.PrecomputedValues{
+			Dp:        rsaDp,
+			Dq:        rsaDq,
+			Qinv:      rsaQinv,
+			CRTValues: []rsa.CRTValue{},
+		},
+	}
+
+	ecDsa256X, _ := new(big.Int).SetString("46440588512774590931736063230467913915182284012779182383533619500422092460122", 10)
+	ecDsa256Y, _ := new(big.Int).SetString("3805648701849436066100068793961540825269458377130907545005086827909300817985", 10)
+	ecDsa256D, _ := new(big.Int).SetString("27364976802251330859863334778865153913260419067928799613072475268713850318348", 10)
+	ecDsa256Key := &ecdsa.PrivateKey{
+		PublicKey: ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     ecDsa256X,
+			Y:     ecDsa256Y,
+		},
+		D: ecDsa256D,
+	}
+
+	ecDsa384X, _ := new(big.Int).SetString("29990111091239627192665141980176542185683741491095927353923698474093483609776787457023321645830720432899228902516266", 10)
+	ecDsa384Y, _ := new(big.Int).SetString("18671623354687946223865816665821866929613227373262947220106515362989193253901490069913353935925630019668174938817081", 10)
+	ecDsa384D, _ := new(big.Int).SetString("2889949606013569690362264247910577554411207992641682332602011550384293294970872854035706361915044719593747685388818", 10)
+	ecDsa384Key := &ecdsa.PrivateKey{
+		PublicKey: ecdsa.PublicKey{
+			Curve: elliptic.P384(),
+			X:     ecDsa384X,
+			Y:     ecDsa384Y,
+		},
+		D: ecDsa384D,
+	}
+
+	ecDsa521X, _ := new(big.Int).SetString("4402647613186137418962458644805216088116725945293422204130228384201606379620975360267168868077720235906010278054415823980681644933726866421447586484944166188", 10)
+	ecDsa521Y, _ := new(big.Int).SetString("2130482323314404387666653912266716286265983625697997927119424004060629190501633949869822692193763296916981545233653236718368283111555337775393159035752211853", 10)
+	ecDsa521D, _ := new(big.Int).SetString("5861490831385977760498604046054515858972258068712574466879888582426090267695056372600709129575526893732420365360426250187633904340087080710548647491865731585", 10)
+	ecDsa521Key := &ecdsa.PrivateKey{
+		PublicKey: ecdsa.PublicKey{
+			Curve: elliptic.P521(),
+			X:     ecDsa521X,
+			Y:     ecDsa521Y,
+		},
+		D: ecDsa521D,
+	}
+
+	ed25519Key := &ed25519.PrivateKey{0x0, 0xd8, 0xf7, 0x75, 0xba, 0x68, 0xaa, 0xf3, 0xa4, 0xa6, 0xa3, 0x0, 0xde, 0xfd, 0x49, 0x84, 0xaa, 0xfd, 0x87, 0x9, 0xd, 0x22, 0x29, 0xe0, 0xf, 0x87, 0xa0, 0x5f, 0xd7, 0x3a, 0xda, 0xaf, 0xc6, 0xf7, 0x37, 0xda, 0x5b, 0xa8, 0xca, 0x52, 0x25, 0x11, 0x5b, 0xfd, 0x61, 0x7c, 0x59, 0xcc, 0xfc, 0xd1, 0x28, 0x96, 0xf1, 0xe9, 0x96, 0xdd, 0xa2, 0xc5, 0xa9, 0xd4, 0x40, 0xae, 0xcf, 0xab}
+
+	keysWithPassword = []testKeyStruct{
 		{
 			// puttygen -t rsa -b 512 -C "a@b" -o pass.ppk
 			content: `PuTTY-User-Key-File-2: ssh-rsa
@@ -41,26 +133,12 @@ ZJsVbNlwaPjIrs9KiYIWTaBXifB7jJH6CdADEd5DV2jhQk+xi5PWdNf1uLnlAPpE
 D51wcjdd2aEcpvif7LNSksRJZkJuMJVt2o68SDM4kQlQivc9lBf3HR8t3yxxjNV2
 lmHm9dFVUGKo7nh/eyWzo1AibICdfMnc4pc69FstgM5Nuetl1Lq157XFvKKZyisd
 Private-MAC: 7f8e59f1f2268600076dbdef55c6acb91c6c1578`,
-			encryptionMethod: "rsa",
-			password:         "testkey",
+			keyType:  "rsa",
+			password: []byte("testkey"),
+			data:     rsaKey,
 		},
 		{
-			// puttygen -t ecdsa -b 256 -C "a@b" -o pass.ecdsa.ppk
-			content: `PuTTY-User-Key-File-2: ecdsa-sha2-nistp256
-Encryption: aes256-cbc
-Comment: a@b
-Public-Lines: 3
-AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBGascQ2IAWOr
-eeFFvfkMPrEzIv9YzW4xPAhdnKcHmpBaCGnru7j5YilLdanHF1j3E65/nsUJOAt8
-+j3eSrULEEE=
-Private-Lines: 1
-61hg1CoGUcsBB8u5TD48gzdmxMDP6+D+GhD4UzDisD+iKehU8PatDdQIVtRUY8ja
-Private-MAC: 07bafdfa36c3184d01f79e0db8f668e761ab4e20`,
-			encryptionMethod: "ecdsa",
-			password:         "testkey",
-		},
-		{
-			// puttygen -t ecdsa -b 256 -C "a@b" -o pass.ecdsa.ppk
+			// puttygen -t dsa -b 2048 -C "a@b" -o pass.dsa.ppk
 			content: `PuTTY-User-Key-File-2: ssh-dss
 Encryption: aes256-cbc
 Comment: a@b
@@ -86,8 +164,25 @@ MXs=
 Private-Lines: 1
 IcDcTw/elt2xwgWoweaz0wb4mHVCLc3w64YXc8hxouE=
 Private-MAC: 30b6587e0f0e4baf38895408d5d6c903add96816`,
-			encryptionMethod: "ecdsa",
-			password:         "testkey",
+			keyType:  "dsa",
+			password: []byte("testkey"),
+			data:     dsaKey,
+		},
+		{
+			// puttygen -t ecdsa -b 256 -C "a@b" -o pass.ecdsa.ppk
+			content: `PuTTY-User-Key-File-2: ecdsa-sha2-nistp256
+Encryption: aes256-cbc
+Comment: a@b
+Public-Lines: 3
+AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBGascQ2IAWOr
+eeFFvfkMPrEzIv9YzW4xPAhdnKcHmpBaCGnru7j5YilLdanHF1j3E65/nsUJOAt8
++j3eSrULEEE=
+Private-Lines: 1
+61hg1CoGUcsBB8u5TD48gzdmxMDP6+D+GhD4UzDisD+iKehU8PatDdQIVtRUY8ja
+Private-MAC: 07bafdfa36c3184d01f79e0db8f668e761ab4e20`,
+			keyType:  "ecdsa256",
+			password: []byte("testkey"),
+			data:     ecDsa256Key,
 		},
 		{
 			// puttygen -t ecdsa -b 384 -C "a@b" -o pass.ecdsa.ppk
@@ -102,8 +197,9 @@ Private-Lines: 2
 tQBqst/bUEfUTKGbBv17b1Mb38AYaUT3Wposs+ZydBc1uHg54tM+kzCuon+4/36o
 dRKoYQjl8YUcKtPkihNRKw==
 Private-MAC: 898b91d24130483ba2a5cf478ed65386b325aba8`,
-			encryptionMethod: "ecdsa",
-			password:         "testkey",
+			keyType:  "ecdsa384",
+			password: []byte("testkey"),
+			data:     ecDsa384Key,
 		},
 		{
 			// puttygen -t ecdsa -b 521 -C "a@b" -o pass.ecdsa.ppk
@@ -119,8 +215,9 @@ Private-Lines: 2
 7KW71RQdH1EQD2nBdI7y8JmufwoX2bupP8QCcS9/bS+pZQCGu0XuzBd8YswfUl9H
 fKT7hsBrywG5Z3ujmLerhf1bCIKotolmpxGQyPE0bCE=
 Private-MAC: 586871c9dad8859f3d9b6efad81d3c26d923040c`,
-			encryptionMethod: "ecdsa",
-			password:         "testkey",
+			keyType:  "ecdsa512",
+			password: []byte("testkey"),
+			data:     ecDsa521Key,
 		},
 		{
 			// puttygen -t ed25519 -b 256 -C "a@b" -o pass.ed25519.ppk
@@ -133,14 +230,14 @@ rs+r
 Private-Lines: 1
 i6a/aAknwkK/cVT8nW9zcsOJDvOdPvfBlx0suOtygmSbz9L4yoBAZZu8AHxWDSgm
 Private-MAC: 8fa9edfc1b94bec840ee1526d290bf1d8eb9fbc9`,
-			encryptionMethod: "ed25519",
-			password:         "testkey",
+			keyType:  "ed25519",
+			password: []byte("testkey"),
+			data:     ed25519Key,
 		},
 	}
-)
+}
 
 func Test_readHeader(t *testing.T) {
-
 	header := "PuTTY-User-Key-File-2: ssh-rsa"
 	expectedHeaderFormat := "PuTTY-User-Key-File-2"
 	reader := strings.NewReader(header)
@@ -185,7 +282,6 @@ func Test_readHeader(t *testing.T) {
 	if err == nil {
 		t.Errorf("Header empty")
 	}
-
 }
 
 func Test_decodeFields(t *testing.T) {
@@ -311,9 +407,18 @@ func TestParseRawPrivateKey(t *testing.T) {
 			t.Errorf("error loading key")
 		}
 
-		_, err = key.ParseRawPrivateKey([]byte("testkey"))
+		v, err := key.ParseRawPrivateKey(encryptedKey.password)
 		if err != nil {
 			t.Errorf("error decrypting key")
+		}
+
+		switch v := v.(type) {
+		case *dsa.PrivateKey, *rsa.PrivateKey, *ecdsa.PrivateKey, *ed25519.PrivateKey:
+			if !reflect.DeepEqual(v, encryptedKey.data) {
+				t.Errorf("error verifying a %T key", v)
+			}
+		default:
+			t.Errorf("unknown %T key type", v)
 		}
 	}
 }
@@ -325,9 +430,31 @@ func TestParseRawPublicKey(t *testing.T) {
 			t.Errorf("error loading key")
 		}
 
-		_, err = key.ParseRawPublicKey()
+		v, err := key.ParseRawPublicKey()
 		if err != nil {
-			t.Errorf("error decrypting key")
+			t.Errorf("error parsing public key")
+		}
+
+		switch v := v.(type) {
+		case *dsa.PublicKey:
+			if !reflect.DeepEqual(*v, encryptedKey.data.(*dsa.PrivateKey).PublicKey) {
+				t.Errorf("error verifying a %T key", v)
+			}
+		case *rsa.PublicKey:
+			if !reflect.DeepEqual(*v, encryptedKey.data.(*rsa.PrivateKey).PublicKey) {
+				t.Errorf("error verifying a %T key", v)
+			}
+		case *ecdsa.PublicKey:
+			if !reflect.DeepEqual(*v, encryptedKey.data.(*ecdsa.PrivateKey).PublicKey) {
+				t.Errorf("error verifying a %T key", v)
+			}
+		case ed25519.PublicKey:
+			x := ed25519.PublicKey([]byte(*encryptedKey.data.(*ed25519.PrivateKey))[ed25519.PublicKeySize:])
+			if !reflect.DeepEqual(v, x) {
+				t.Errorf("error verifying a %T key", v)
+			}
+		default:
+			t.Errorf("unknown %T key type", v)
 		}
 	}
 }
