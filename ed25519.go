@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (k Key) readED25519PublicKey() (ed25519.PublicKey, error) {
+func (k Key) readED25519PublicKey() (*ed25519.PublicKey, error) {
 	var pub struct {
 		Header string
 		Bytes  []byte
@@ -23,7 +23,7 @@ func (k Key) readED25519PublicKey() (ed25519.PublicKey, error) {
 		return nil, fmt.Errorf("public key unexpected length: %d, expected %d", len(pub.Bytes), ed25519.PublicKeySize)
 	}
 
-	return pub.Bytes, nil
+	return (*ed25519.PublicKey)(&pub.Bytes), nil
 }
 
 func (k Key) readED25519PrivateKey() (*ed25519.PrivateKey, error) {
@@ -40,7 +40,7 @@ func (k Key) readED25519PrivateKey() (*ed25519.PrivateKey, error) {
 
 	var privateKey ed25519.PrivateKey
 	privateKey = append(privateKey, priv...)
-	privateKey = append(privateKey, publicKey...)
+	privateKey = append(privateKey, *publicKey...)
 
 	if len(privateKey) != ed25519.PrivateKeySize {
 		return nil, fmt.Errorf("private key unexpected length: %d, expected %d", len(privateKey), ed25519.PrivateKeySize)

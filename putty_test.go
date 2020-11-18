@@ -448,9 +448,9 @@ func TestParseRawPublicKey(t *testing.T) {
 			if !reflect.DeepEqual(*v, encryptedKey.data.(*ecdsa.PrivateKey).PublicKey) {
 				t.Errorf("error verifying a %T key", v)
 			}
-		case ed25519.PublicKey:
+		case *ed25519.PublicKey:
 			x := ed25519.PublicKey([]byte(*encryptedKey.data.(*ed25519.PrivateKey))[ed25519.PublicKeySize:])
-			if !reflect.DeepEqual(v, x) {
+			if !reflect.DeepEqual(*v, x) {
 				t.Errorf("error verifying a %T key", v)
 			}
 		default:
