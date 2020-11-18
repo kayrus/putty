@@ -29,6 +29,7 @@ func (k Key) readDSAPublicKey() (*dsa.PublicKey, error) {
 			Q: pub.Q,
 			G: pub.G,
 		},
+		Y: pub.Pub,
 	}
 
 	return publicKey, nil
