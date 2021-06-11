@@ -2,11 +2,14 @@ package putty
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/dsa"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
+	"encoding/hex"
+	"fmt"
 	"math/big"
 	"reflect"
 	"strings"
@@ -35,9 +38,15 @@ type testKeyStruct struct {
 	data     interface{}
 }
 
-var keysWithPassword []testKeyStruct
+var (
+	mac1, mac2   []byte
+	keysFixtures []testKeyStruct
+)
 
 func init() {
+	mac1, _ = hex.DecodeString("3c3a9bd98e8e912f6163be95321676b6103aaed8")
+	mac2, _ = hex.DecodeString("df8235a99cc5a0bbcd4a24642ccac67fe31ea382")
+
 	dsaP, _ := new(big.Int).SetString("24594562591148674955193935530570345698901351673115514528850649708585499534112253610063676118481975411425473555170006092361522567122668561166623600473338556612006266904734584520036147901134857358698958891337509539840397725282694053771143291815546131811329906604343196079953386684245940025973122612572623286633577598913988451237865018093641985572774958578455846290160433526300387888405060531817175364632586536057657667465336393991275791245035916446578505777445647787250353018737479407834863073244575186642619947916919893272642340891779424822336371882593459817314757590432914231351510355118493996526096415995901691818803", 10)
 	dsaQ, _ := new(big.Int).SetString("1312341038342200669065145856275284506462910232321", 10)
 	dsaG, _ := new(big.Int).SetString("10425077490021224161949597305729551331605748188798282297372931992795679890533253191063851317774978177087779792313915641092243367750810044491724052104552811663852087628398546468515716758181439573025733351734712399668145973555365229762144691787113025266081984796617297840056005672890746877901282842489089172477827905313991095991925328443157735824309346126295789077407934223177070081244875098862033746719850130865721824549860620047834045903705777084948010434133428686539181823369981863045754945910010043595598173308172093626744719830300869248812222241319999935223546737700715574148072183411259304981353771500265250175443", 10)
@@ -80,6 +89,31 @@ func init() {
 		},
 	}
 
+	rsa2048N, _ := new(big.Int).SetString("25967111115904289073183561833662547569807833887670414054029756655277383180298119369791984179951095159243861045329504520276618295420687500854103113699968868025458341177364191133600455301580172781771353183147710953740515427628917527332516344741585308267548117567895976821479240362951145764725816854353006467624689451159554754504443606103722175343445340461369211625507075688499898051628145113573710079461409232565961586617052397600230077980603174203419790396776786830748108159352134838436200251743434264358097277418149173910690114990041701771397136433717681846642866469400270794717340347979079625102248472362584898465821", 10)
+	rsa2048D, _ := new(big.Int).SetString("18971043536162738007904373721649797482985170003839959487113306203437464434940170520860585662084905263051346061772383179438248378545592833680126601522109791431694239522288134511448339103707198571665050130599697887683230521306629403370323368268720029294142299298882453731669530625114070818241178433349435428381748363590219678227448753611294842810581655356270769926060410258733333473695174209887220259221905950900395100577819149241234651559281741165124564697618881564799788576306983143583623357348716552228101941003138047213854034489157850376350498421485058855592433198552962407194608840169217681532801132349681830476033", 10)
+	rsa2048PrimeA, _ := new(big.Int).SetString("175647912657839629385187093715137779950577519497624285063186225987469846648608910637515109768235899540057973103737324336107907638643777171827316157556466626748531154441518083656629794239760794004563711444483824988986571680924055367656794566071747585477599746867575310430131834343604265331156491830615381803349", 10)
+	rsa2048PrimeB, _ := new(big.Int).SetString("147836149732607189337680383786692674666652100519928012034927325365258700686289916524775710532228255662511932089577947453286845378704437325268986424102345243425563973886582621925770875829428761009901216192490365624829026635852440887556494435547640564027395073961987521039232750098089829390657815728270725436329", 10)
+	rsa2048Dp, _ := new(big.Int).SetString("131334584493829674210939212251444170940356595326946348489422992081785630946210269740301706272378408916512212277071579480938947434524940304729450137612944353732369076416340550428396627967880711485201268778156474601146054474271350308700213682671068967623767038401998763095774147097664522544862620644454972832285", 10)
+	rsa2048Dq, _ := new(big.Int).SetString("6891365754201671779706327303177535149711188597103622026743716968901007531571718189468388783068454782015868174217016791580196112607260875973827815213278983149443794196003935333982788740084301461544596418329463768311834175695091427918352846492790971864804491370582600313942598098015844924065178861557090898393", 10)
+	rsa2048Qinv, _ := new(big.Int).SetString("110813740759121094495870772370879033046355084589683649336385266956713688385144644089091571069396379501151545204563469635622943127313712587644247880671063259060443151779385923258484354383319230757635815163018068144951042011466267059177197095917355811673717871885446128102990706780818265345743683987056669334823", 10)
+	rsa2048Key := &rsa.PrivateKey{
+		PublicKey: rsa.PublicKey{
+			N: rsa2048N,
+			E: 65537,
+		},
+		D: rsa2048D,
+		Primes: []*big.Int{
+			rsa2048PrimeA,
+			rsa2048PrimeB,
+		},
+		Precomputed: rsa.PrecomputedValues{
+			Dp:        rsa2048Dp,
+			Dq:        rsa2048Dq,
+			Qinv:      rsa2048Qinv,
+			CRTValues: []rsa.CRTValue{},
+		},
+	}
+
 	ecDsa256X, _ := new(big.Int).SetString("46440588512774590931736063230467913915182284012779182383533619500422092460122", 10)
 	ecDsa256Y, _ := new(big.Int).SetString("3805648701849436066100068793961540825269458377130907545005086827909300817985", 10)
 	ecDsa256D, _ := new(big.Int).SetString("27364976802251330859863334778865153913260419067928799613072475268713850318348", 10)
@@ -118,7 +152,7 @@ func init() {
 
 	ed25519Key := &ed25519.PrivateKey{0x0, 0xd8, 0xf7, 0x75, 0xba, 0x68, 0xaa, 0xf3, 0xa4, 0xa6, 0xa3, 0x0, 0xde, 0xfd, 0x49, 0x84, 0xaa, 0xfd, 0x87, 0x9, 0xd, 0x22, 0x29, 0xe0, 0xf, 0x87, 0xa0, 0x5f, 0xd7, 0x3a, 0xda, 0xaf, 0xc6, 0xf7, 0x37, 0xda, 0x5b, 0xa8, 0xca, 0x52, 0x25, 0x11, 0x5b, 0xfd, 0x61, 0x7c, 0x59, 0xcc, 0xfc, 0xd1, 0x28, 0x96, 0xf1, 0xe9, 0x96, 0xdd, 0xa2, 0xc5, 0xa9, 0xd4, 0x40, 0xae, 0xcf, 0xab}
 
-	keysWithPassword = []testKeyStruct{
+	keysFixtures = []testKeyStruct{
 		{
 			// puttygen -t rsa -b 512 -C "a@b" -o pass.ppk
 			content: `PuTTY-User-Key-File-2: ssh-rsa
@@ -234,6 +268,75 @@ Private-MAC: 8fa9edfc1b94bec840ee1526d290bf1d8eb9fbc9`,
 			password: []byte("testkey"),
 			data:     ed25519Key,
 		},
+		{
+			// puttygen -t rsa -b puttygen -C "a@b" -o rsa2048.ppk3
+			content: `PuTTY-User-Key-File-3: ssh-rsa
+Encryption: none
+Comment: a@b
+Public-Lines: 6
+AAAAB3NzaC1yc2EAAAADAQABAAABAQDNsvsFOGphVzbJJAARnMs2E9p6jheXLTz7
+dnZqNwZCYomnGurAPEuKmxD3GzdT+xP4BLFbAGDkeJHmjiNAPnbJf7G90u2zD28Y
+J/c/krfKli50ZUOXG1a2DUhIvRM1GewOLhE7q5AOBHLQNFXvU9LR08t9H3u9xPJI
+xNJjP6LqRGn+fP1xqlTbG3NTwCZMMXgXuAUhXGKaKbLUBN5SYmLvLTB6KzdHJQ6x
+H9X+2Ul4hExje5L2X8miQqTxPloNtQNqpEtR2X7ecLyM9v3N1yDUK/NLwJ+PX8C8
+KRbuBi5+xp+k62+btFXIk6CgGpsda/KleLmzTk5QJGLA9DfzrvAd
+Private-Lines: 14
+AAABAQCWR5StE7Jku1sDSJHkTDEKqSaNMxJ5GEvdS4bnwpuIFIWM2FV5bJOkB/Y1
+EmUxrdXA9Wy9l2EyigPN9To7zWbrf6dTj66pizUW6NvyTjaIg4Ac+X6P/yEykDGn
+Mru9p9qV4YIlngn4s7dN9W5zE0KKmbmpCD9XPXPlRiaO7AcSLujUHp7kPij2i9EL
+vYRy0TS2g/HbQlBiaCS3+RI5K1UrwSP/MUFzmy319ZuI5XZUz7Z7OER4tgFi8qth
+HqPkvBTnbi3ORIhRQQT+faEmKHwyDuXTXlITWj+1k3wY6sdr308OfRut6OcH417U
+/YcZfBK6A3iZ9AJ/ih1Sqd0xCDkBAAAAgQD6IYSnq2k8LcGZvEtMt/izjFQICaJu
+xvIbXBRsTqMmpNZiaDJU4i8NTbvfHBOSkx2Ip9dFQIVy9ijOuwg24VuXyCDY8Rzb
+L/3Wkz/a1q4CJJSXgOpqQF60Dk8nYNRqEc2ykGkn/3GV/uqWbz0ohS1Wr55XiZeJ
+fUSKmI72Yk6BVQAAAIEA0oaSAScm+gat8e6jAGpm1mHwf3iLI34NVgY3TzpL4kyz
+Xk0OpxWMY5cgoXmWMnT1yCpun9SYBzyRhrfY8x7VPcNC9X96hNp/nIkp/FIWq/8M
+TV2SIFcxidXpwMbGD8HXjAng+AkNYlK8ow/SDEkYsHWKuZsf99VqiHzgs5Y5U6kA
+AACBAJ3N00Sgdv036FTLnU+NlF4N0kjhzjMDAPWRf9XvwkugiyB2tZ43rVCmXzgE
+FzNeuOrWXPC7xh9Jfbg04rJv7sYZhSIIadTO3y3ToPXHpRNwg9pmC1BaQLMb0I5M
+JUUNn5ASrFQki0/Ok5mwxz+QpktrvUuShkd/4e+sqHZ5mZ0n
+Private-MAC: cceed3168be3c35863ebff8ff41457aa5ab449603b5660df1a4eea0201827c44`,
+			keyType:  "ssh-rsa",
+			password: nil,
+			data:     rsa2048Key,
+		},
+		{
+			// puttygen -t rsa -b puttygen -C "a@b" -o rsa2048.ppk3
+			content: `PuTTY-User-Key-File-3: ssh-rsa
+Encryption: aes256-cbc
+Comment: a@b
+Public-Lines: 6
+AAAAB3NzaC1yc2EAAAADAQABAAABAQDNsvsFOGphVzbJJAARnMs2E9p6jheXLTz7
+dnZqNwZCYomnGurAPEuKmxD3GzdT+xP4BLFbAGDkeJHmjiNAPnbJf7G90u2zD28Y
+J/c/krfKli50ZUOXG1a2DUhIvRM1GewOLhE7q5AOBHLQNFXvU9LR08t9H3u9xPJI
+xNJjP6LqRGn+fP1xqlTbG3NTwCZMMXgXuAUhXGKaKbLUBN5SYmLvLTB6KzdHJQ6x
+H9X+2Ul4hExje5L2X8miQqTxPloNtQNqpEtR2X7ecLyM9v3N1yDUK/NLwJ+PX8C8
+KRbuBi5+xp+k62+btFXIk6CgGpsda/KleLmzTk5QJGLA9DfzrvAd
+Key-Derivation: Argon2id
+Argon2-Memory: 8192
+Argon2-Passes: 13
+Argon2-Parallelism: 1
+Argon2-Salt: 745d60746c67666afa47dbf23226c6c9
+Private-Lines: 14
+gqyGdBy5Nhxs5w00/7LUKZVUgwKVbTOcDjMh0ItVc5mWr7PoqtJhzrv7o8zEshHL
+vviIJJ2NTo+whHEStAIaxqnJC0/KWSXvnhElH0+27+Yvkz+Z32hyczSbQp/fsBSA
+3ZMQoyR92uAjG+gV7b0mqgsC0JWyaZYvippMNBHArZM8kaXdUYLDgmeXwIf7o/1I
+QVh6RPanavcbDtafumHF2bIRCq5og1UoiaVyysgSMdrDpkkFvjHNwc4+xDEqnH3u
+3v9PLIsolhbWUM7BwC1PnuCiaagbRvXoq+QTfdT5cbQw8lFngTgYT5NDkGJKMjB2
+qoDIOYOK8NsoiUxk2UvPP4XpwfJyHYL1LuS3B85e3/RbVcfM2UIm/75CNb/yLJ09
+1x4oLNBDkZQDhxwsT7VMg+h97eq/zJVhoAUXKN17JoV9hVmi5J46tskLAKhWA2vs
+QuDd6pfxjc8TyaiMLNTDr7/72UNw/mn7zH9GedyhMRhyYnzy8qYOFa5k6/bFnV89
+qRmKUqkaVDDf6dGtOOVvGP4iWj8TzrQsOa2qyj4UNUdj/9BSYHvodNPkOFMhUHqn
+fUU6RUKUV3q1Uoj5E8HaMR7OHNMSx9OA7iWcpuMYAYbcyq4OJcE6ggy3FImrgTe0
+9fBTw4Og3p91nBwOTajVj57wg5cs34YfBUQK+6P38A7+xTLBaVwvawaovAyVdDkD
+y1Ae/WtloFz5aRzt8cNYfxvyzoFrGPRaomFgltLfLBhDELZcpXF8TQFpswN/wo4o
+REFZdIWdiIYROykhX+FbKVMiufqj+snbpPACudio/DeC03Dj5oagDNJ5sfqiHn2m
+93g2/twM3JT/bJOD01jL00yaSgaR4lWTelKbfrtqrgcZR1EryBwHv7VZykR066xJ
+Private-MAC: 819054f7340f430ab9896ad76559cd2d489ab23bc517113e1cd425f461fac726`,
+			keyType:  "ssh-rsa",
+			password: []byte("testkey"),
+			data:     rsa2048Key,
+		},
 	}
 }
 
@@ -244,7 +347,7 @@ func Test_readHeader(t *testing.T) {
 	h, err := readHeader(bufio.NewReader(reader))
 
 	if err != nil {
-		t.Errorf("got=[%s], expected=[%s]", h, expectedHeaderFormat)
+		t.Errorf("got=[%s], expected=[%s]: %v", h, expectedHeaderFormat, err)
 	}
 
 	header = ""
@@ -316,28 +419,11 @@ Private-MAC: df8235a99cc5a0bbcd4a24642ccac67fe31ea382`
 	reader := strings.NewReader(privateKeyContent)
 	key, err := decodeFields(bufio.NewReader(reader))
 	if err != nil {
-		t.Errorf("Failed to parse private key")
+		t.Errorf("Failed to parse private key: %v", err)
+		return
 	}
 
-	expectedAlgorithmInHeader := "ssh-rsa"
-	if key.Algo != expectedAlgorithmInHeader {
-		t.Errorf("got=[%s], expected=[%s]", key.Algo, expectedAlgorithmInHeader)
-	}
-
-	expectedEncryption := "none"
-	if key.Encryption != expectedEncryption {
-		t.Errorf("got=[%s], expected=[%s]", key.Encryption, expectedEncryption)
-	}
-
-	expectedComment := "a@b"
-	if key.Comment != expectedComment {
-		t.Errorf("got=[%s], expected=[%s]", key.Comment, expectedComment)
-	}
-
-	expectedPrivateMAC := "df8235a99cc5a0bbcd4a24642ccac67fe31ea382"
-	if key.PrivateMac != expectedPrivateMAC {
-		t.Errorf("got=[%s], expected=[%s]", key.PrivateMac, expectedPrivateMAC)
-	}
+	validateFields(t, key, mac2)
 
 	privateKeyContent = `PuTTY-User-Key-File-1: ssh-rsa
 Encryption: none
@@ -365,20 +451,22 @@ func TestKey_Load(t *testing.T) {
 	key := &Key{}
 	err := key.Load([]byte(keyContent))
 	if err != nil {
-		t.Errorf("error loading Key fields")
+		t.Errorf("error loading Key fields: %v", err)
+		return
 	}
-	validateFields(key, t)
+	validateFields(t, key, mac1)
 }
 
 func TestNew(t *testing.T) {
 	key, err := New([]byte(keyContent))
 	if err != nil {
-		t.Errorf("error loading Key fields")
+		t.Errorf("error loading Key fields: %v", err)
+		return
 	}
-	validateFields(key, t)
+	validateFields(t, key, mac1)
 }
 
-func validateFields(key *Key, t *testing.T) {
+func validateFields(t *testing.T, key *Key, mac []byte) {
 	expectedAlgorithmInHeader := "ssh-rsa"
 	if key.Algo != expectedAlgorithmInHeader {
 		t.Errorf("got=[%s], expected=[%s]", key.Algo, expectedAlgorithmInHeader)
@@ -394,67 +482,71 @@ func validateFields(key *Key, t *testing.T) {
 		t.Errorf("got=[%s], expected=[%s]", key.Comment, expectedComment)
 	}
 
-	expectedPrivateMAC := "3c3a9bd98e8e912f6163be95321676b6103aaed8"
-	if key.PrivateMac != expectedPrivateMAC {
-		t.Errorf("got=[%s], expected=[%s]", key.PrivateMac, expectedPrivateMAC)
+	if !bytes.Equal(key.PrivateMac, mac) {
+		t.Errorf("got=[%s], expected=[%s]", hex.EncodeToString(key.PrivateMac), hex.EncodeToString(mac))
 	}
 }
 
 func TestParseRawPrivateKey(t *testing.T) {
-	for _, encryptedKey := range keysWithPassword {
-		key, err := New([]byte(encryptedKey.content))
+	for i, fixture := range keysFixtures {
+		key, err := New([]byte(fixture.content))
 		if err != nil {
-			t.Errorf("error loading key")
+			t.Errorf("error loading key #%d: %v", i, err)
+			continue
 		}
 
-		v, err := key.ParseRawPrivateKey(encryptedKey.password)
+		v, err := key.ParseRawPrivateKey(fixture.password)
 		if err != nil {
-			t.Errorf("error decrypting key")
+			t.Errorf("error decrypting key #%d: %v", i, err)
+			continue
 		}
 
 		switch v := v.(type) {
 		case *dsa.PrivateKey, *rsa.PrivateKey, *ecdsa.PrivateKey, *ed25519.PrivateKey:
-			if !reflect.DeepEqual(v, encryptedKey.data) {
-				t.Errorf("error verifying a %T key", v)
+			if !reflect.DeepEqual(v, fixture.data) {
+				fmt.Printf("RSA key: %#+v\n", v)
+				t.Errorf("error verifying a %T key #%d", v, i)
 			}
 		default:
-			t.Errorf("unknown %T key type", v)
+			t.Errorf("unknown %T key #%d type", v, i)
 		}
 	}
 }
 
 func TestParseRawPublicKey(t *testing.T) {
-	for _, encryptedKey := range keysWithPassword {
-		key, err := New([]byte(encryptedKey.content))
+	for i, fixture := range keysFixtures {
+		key, err := New([]byte(fixture.content))
 		if err != nil {
-			t.Errorf("error loading key")
+			t.Errorf("error loading key #%d: %v", i, err)
+			continue
 		}
 
 		v, err := key.ParseRawPublicKey()
 		if err != nil {
-			t.Errorf("error parsing public key")
+			t.Errorf("error parsing public key #%d: %v", i, err)
+			continue
 		}
 
 		switch v := v.(type) {
 		case *dsa.PublicKey:
-			if !reflect.DeepEqual(*v, encryptedKey.data.(*dsa.PrivateKey).PublicKey) {
-				t.Errorf("error verifying a %T key", v)
+			if !reflect.DeepEqual(*v, fixture.data.(*dsa.PrivateKey).PublicKey) {
+				t.Errorf("error verifying a %T key #%d", v, i)
 			}
 		case *rsa.PublicKey:
-			if !reflect.DeepEqual(*v, encryptedKey.data.(*rsa.PrivateKey).PublicKey) {
-				t.Errorf("error verifying a %T key", v)
+			if !reflect.DeepEqual(*v, fixture.data.(*rsa.PrivateKey).PublicKey) {
+				t.Errorf("error verifying a %T key #%d", v, i)
 			}
 		case *ecdsa.PublicKey:
-			if !reflect.DeepEqual(*v, encryptedKey.data.(*ecdsa.PrivateKey).PublicKey) {
-				t.Errorf("error verifying a %T key", v)
+			if !reflect.DeepEqual(*v, fixture.data.(*ecdsa.PrivateKey).PublicKey) {
+				t.Errorf("error verifying a %T key #%d", v, i)
 			}
 		case *ed25519.PublicKey:
-			x := ed25519.PublicKey([]byte(*encryptedKey.data.(*ed25519.PrivateKey))[ed25519.PublicKeySize:])
+			x := ed25519.PublicKey([]byte(*fixture.data.(*ed25519.PrivateKey))[ed25519.PublicKeySize:])
 			if !reflect.DeepEqual(*v, x) {
-				t.Errorf("error verifying a %T key", v)
+				t.Errorf("error verifying a %T key #%d", v, i)
 			}
 		default:
-			t.Errorf("unknown %T key type", v)
+			t.Errorf("unknown %T key #%d type", v, i)
 		}
 	}
 }
