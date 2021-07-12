@@ -331,9 +331,13 @@ func decodeFields(r reader) (*Key, error) {
 			} else {
 				k.PrivateKey = v
 			}
-		case "`Private-Hash",
+		case "Private-Hash",
 			"Private-MAC":
 			// read hash or signature
+			if k.Version == 0 {
+				return nil, fmt.Errorf("cannot read %q without a header: %v", h, err)
+			}
+
 			k.PrivateMac, err = hex.DecodeString(string(b))
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode the %q hex string: %v", h, err)
@@ -500,6 +504,8 @@ func (k Key) deriveKeys(password []byte) ([]byte, []byte, []byte, error) {
 		h = argon2.IDKey(password, k.Argon2Salt, k.Argon2Passes, k.Argon2Memory, k.Argon2Parallelism, argon2KeyLength)
 	case "Argon2i":
 		h = argon2.Key(password, k.Argon2Salt, k.Argon2Passes, k.Argon2Memory, k.Argon2Parallelism, argon2KeyLength)
+	case "":
+		return nil, nil, nil, nil
 	default:
 		return nil, nil, nil, fmt.Errorf("%q argon2 key deriviation is not supported", k.KeyDerivation)
 	}
@@ -515,20 +521,13 @@ func (k Key) deriveKeys(password []byte) ([]byte, []byte, []byte, error) {
 
 // decrypt decrypts the key, when it is encrypted. and validates its signature
 func (k *Key) decrypt(password []byte) error {
-	var (
-		err error
-		cipherKey,
-		cipherIV,
-		macKey []byte
-	)
+	cipherKey, cipherIV, macKey, err := k.deriveKeys(password)
+	if err != nil {
+		return err
+	}
 
 	// decrypt the key, when it is encrypted
 	if !k.decrypted && k.Encryption != "none" {
-		cipherKey, cipherIV, macKey, err = k.deriveKeys(password)
-		if err != nil {
-			return err
-		}
-
 		err = decryptCBC(cipherKey, cipherIV, macKey, k.PrivateKey)
 		if err != nil {
 			return err

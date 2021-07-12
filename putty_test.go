@@ -269,7 +269,7 @@ Private-MAC: 8fa9edfc1b94bec840ee1526d290bf1d8eb9fbc9`,
 			data:     ed25519Key,
 		},
 		{
-			// puttygen -t rsa -b puttygen -C "a@b" -o rsa2048.ppk3
+			// puttygen -t rsa -b 2048 -C "a@b" -o rsa2048.ppk3
 			content: `PuTTY-User-Key-File-3: ssh-rsa
 Encryption: none
 Comment: a@b
@@ -301,7 +301,7 @@ Private-MAC: cceed3168be3c35863ebff8ff41457aa5ab449603b5660df1a4eea0201827c44`,
 			data:     rsa2048Key,
 		},
 		{
-			// puttygen -t rsa -b puttygen -C "a@b" -o rsa2048.ppk3
+			// puttygen -t rsa -b 2048 -C "a@b" -o rsa2048.ppk3
 			content: `PuTTY-User-Key-File-3: ssh-rsa
 Encryption: aes256-cbc
 Comment: a@b
@@ -484,6 +484,12 @@ func validateFields(t *testing.T, key *Key, mac []byte) {
 
 	if !bytes.Equal(key.PrivateMac, mac) {
 		t.Errorf("got=[%s], expected=[%s]", hex.EncodeToString(key.PrivateMac), hex.EncodeToString(mac))
+	}
+
+	_, err := key.ParseRawPrivateKey(nil)
+	if err != nil {
+		t.Error(err)
+		return
 	}
 }
 
