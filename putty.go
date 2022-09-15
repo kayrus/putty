@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -54,6 +55,72 @@ type Key struct {
 	Encryption        string
 	PrivateMac        []byte
 	decrypted         bool
+}
+
+var noLines = strings.NewReplacer("\r", "", "\n", "")
+
+func (k *Key) Marshall() (ret []byte, err error) {
+	buf := new(bytes.Buffer)
+	switch k.Version {
+	case 1:
+		return ret, fmt.Errorf("PuTTY key format is too old")
+	case 2:
+		buf.WriteString(puttyHeaderV2)
+	case 3:
+		buf.WriteString(puttyHeaderV3)
+	default:
+		return ret, fmt.Errorf("PuTTY key format verion is too new")
+	}
+
+	switch k.Algo {
+	case "ssh-rsa",
+		"ecdsa-sha2-nistp256",
+		"ecdsa-sha2-nistp384",
+		"ecdsa-sha2-nistp521",
+		"ssh-dss",
+		"ssh-ed25519":
+		fmt.Fprintf(buf, ": %s\r\n", k.Algo)
+	default:
+		return ret, fmt.Errorf("invalid algorithm")
+	}
+
+	if k.decrypted {
+		fmt.Fprintf(buf, "Encryption: %s\r\n", "none")
+	} else {
+		fmt.Fprintf(buf, "Encryption: %s\r\n", "aes256-cbc")
+	}
+
+	if k.Comment == "" {
+		k.Comment = "PuTTY key"
+	}
+	fmt.Fprintf(buf, "Comment: %s\r\n", noLines.Replace(k.Comment))
+
+	pub := splitByWidth(base64.StdEncoding.EncodeToString(k.PublicKey), 64)
+	fmt.Fprintf(buf, "Public-Lines: %d\r\n", len(pub))
+	fmt.Fprintf(buf, "%s\r\n", strings.Join(pub, "\r\n"))
+
+	if k.KeyDerivation != "" {
+		fmt.Fprintf(buf, "Key-Derivation: %s\r\n", k.KeyDerivation)
+	}
+	if k.Argon2Memory > 0 {
+		fmt.Fprintf(buf, "Argon2-Memory: %d\r\n", k.Argon2Memory)
+	}
+	if k.Argon2Passes > 0 {
+		fmt.Fprintf(buf, "Argon2-Passes: %d\r\n", k.Argon2Passes)
+	}
+	if k.Argon2Parallelism > 0 {
+		fmt.Fprintf(buf, "Argon2-Parallelism: %d\r\n", k.Argon2Parallelism)
+	}
+	if len(k.Argon2Salt) > 0 {
+		fmt.Fprintf(buf, "Argon2-Salt: %02x\r\n", k.Argon2Salt)
+	}
+
+	priv := splitByWidth(base64.StdEncoding.EncodeToString(k.PrivateKey), 64)
+	fmt.Fprintf(buf, "Private-Lines: %d\r\n", len(priv))
+	fmt.Fprintf(buf, "%s\r\n", strings.Join(priv, "\r\n"))
+
+	fmt.Fprintf(buf, "Private-MAC: %0x", k.PrivateMac)
+	return buf.Bytes(), nil
 }
 
 type reader interface {
@@ -123,7 +190,7 @@ func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
 		return nil, fmt.Errorf("expecting password")
 	}
 
-	err := k.decrypt(password)
+	err := k.Decrypt(password)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +365,9 @@ func decodeFields(r reader) (*Key, error) {
 			// check the encryption format
 			switch string(b) {
 			case "none":
+				k.decrypted = true
 			case "aes256-cbc":
+				k.decrypted = false
 			default:
 				return nil, fmt.Errorf("invalid encryption format: %s", b)
 			}
@@ -440,6 +509,27 @@ func decryptCBC(cipherKey, cipherIV, macKey, ciphertext []byte) error {
 	return nil
 }
 
+func encryptCBC(cipherKey, cipherIV, macKey, ciphertext []byte) error {
+	if len(ciphertext) < aes.BlockSize {
+		return fmt.Errorf("ciphertext is too short")
+	}
+
+	if len(ciphertext)%aes.BlockSize != 0 {
+		return fmt.Errorf("ciphertext is not a multiple of the block size")
+	}
+
+	// initialize AES 256 bit cipher
+	cipherBlock, err := aes.NewCipher(cipherKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize a cipher block: %v", err)
+	}
+
+	// decrypt
+	cipher.NewCBCEncrypter(cipherBlock, cipherIV).CryptBlocks(ciphertext, ciphertext)
+
+	return nil
+}
+
 // validateHMAC validates PuTTY key HMAC with a hash function
 func (k Key) validateHMAC(hashFunc hash.Hash) error {
 	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Algo)))
@@ -520,7 +610,7 @@ func (k Key) deriveKeys(password []byte) ([]byte, []byte, []byte, error) {
 }
 
 // decrypt decrypts the key, when it is encrypted. and validates its signature
-func (k *Key) decrypt(password []byte) error {
+func (k *Key) Decrypt(password []byte) error {
 	cipherKey, cipherIV, macKey, err := k.deriveKeys(password)
 	if err != nil {
 		return err
@@ -534,6 +624,41 @@ func (k *Key) decrypt(password []byte) error {
 		}
 	}
 	k.decrypted = true
+
+	// validate key signature
+	switch k.Version {
+	case 2:
+		err = k.validateHMAC(hmac.New(sha1.New, macKey))
+	case 3:
+		err = k.validateHMAC(hmac.New(sha256.New, macKey))
+	default:
+		err = fmt.Errorf("unknown key format version: %d", k.Version)
+	}
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Encrypt encrypts the key, when it is encrypted. and validates its signature
+func (k *Key) Encrypt(password []byte) error {
+	if len(password) == 0 {
+		return fmt.Errorf("no password provided")
+	}
+	cipherKey, cipherIV, macKey, err := k.deriveKeys(password)
+	if err != nil {
+		return err
+	}
+
+	// decrypt the key, when it is encrypted
+	if k.decrypted {
+		err = encryptCBC(cipherKey, cipherIV, macKey, k.PrivateKey)
+		if err != nil {
+			return err
+		}
+	}
+	k.decrypted = false
 
 	// validate key signature
 	switch k.Version {

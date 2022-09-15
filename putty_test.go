@@ -501,6 +501,12 @@ func TestParseRawPrivateKey(t *testing.T) {
 			continue
 		}
 
+		enc, err := key.Marshall()
+		if strings.TrimSpace(fixture.content) != strings.ReplaceAll(
+			strings.TrimSpace(string(enc)), "\r", "") {
+			t.Errorf("Expect:\n%s\nGot:\n%s", fixture.content, string(enc))
+		}
+
 		v, err := key.ParseRawPrivateKey(fixture.password)
 		if err != nil {
 			t.Errorf("error decrypting key #%d: %v", i, err)
@@ -515,6 +521,14 @@ func TestParseRawPrivateKey(t *testing.T) {
 			}
 		default:
 			t.Errorf("unknown %T key #%d type", v, i)
+		}
+
+		key.Encrypt(fixture.password)
+
+		enc, err = key.Marshall()
+		if strings.TrimSpace(fixture.content) != strings.ReplaceAll(
+			strings.TrimSpace(string(enc)), "\r", "") {
+			t.Errorf("Expect:\n%s\nGot:\n%s", fixture.content, string(enc))
 		}
 	}
 }
