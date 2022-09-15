@@ -186,7 +186,7 @@ func New(b []byte) (*Key, error) {
 // ParseRawPrivateKey returns a private key from a PuTTY encoded private key. It
 // supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
 func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
-	if k.Encryption != "none" && len(password) == 0 {
+	if !k.decrypted && len(password) == 0 {
 		return nil, fmt.Errorf("expecting password")
 	}
 
@@ -617,7 +617,7 @@ func (k *Key) Decrypt(password []byte) error {
 	}
 
 	// decrypt the key, when it is encrypted
-	if !k.decrypted && k.Encryption != "none" {
+	if !k.decrypted {
 		err = decryptCBC(cipherKey, cipherIV, macKey, k.PrivateKey)
 		if err != nil {
 			return err
