@@ -749,7 +749,7 @@ func (k *Key) decrypt(password []byte) (err error) {
 	case 1:
 		h := sha1.New().Sum(k.PrivateKey)
 		if !bytes.Equal(h, k.PrivateMac) {
-			return fmt.Errorf("calculated HASH %q doesn't correspond to %q", hex.EncodeToString(h), hex.EncodeToString(k.PrivateMac))
+			return fmt.Errorf("calculated SHA1 sum %q doesn't correspond to %q", hex.EncodeToString(h), hex.EncodeToString(k.PrivateMac))
 		}
 		return nil
 	case 2:
@@ -759,10 +759,6 @@ func (k *Key) decrypt(password []byte) (err error) {
 	default:
 		err = fmt.Errorf("unknown key format version: %d", k.Version)
 	}
-	if err != nil {
-		return
-	}
-
 	return
 }
 
