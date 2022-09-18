@@ -14,7 +14,7 @@ func (k Key) readECDSAPublicKey() (*ecdsa.PublicKey, error) {
 		Length string
 		Bytes  []byte
 	}
-	err := unmarshal(k.PublicKey, &pub, false)
+	_, err := unmarshal(k.PublicKey, &pub, false)
 	if err != nil {
 		return nil, err
 	}
@@ -52,14 +52,52 @@ func (k Key) readECDSAPublicKey() (*ecdsa.PublicKey, error) {
 	return publicKey, nil
 }
 
-func (k Key) readECDSAPrivateKey() (*ecdsa.PrivateKey, error) {
+func (k *Key) setECDSAPublicKey(pk *ecdsa.PublicKey) (err error) {
+	var pub struct {
+		Header string
+		Length string
+		Bytes  []byte
+	}
+
+	switch c := pk.Curve.Params().Name; c {
+	case "P-256":
+		pub.Length = "nistp256"
+	case "P-384":
+		pub.Length = "nistp384"
+	case "P-521":
+		pub.Length = "nistp521"
+	default:
+		return fmt.Errorf("unsupported elliptic curve %s", c)
+	}
+
+	pub.Header = "ecdsa-sha2-" + pub.Length
+	k.Algo = pub.Header
+
+	x := (pk.X).Bytes()
+	y := (pk.Y).Bytes()
+
+	// balance the integers slices
+	if diff := len(x) - len(y); diff > 0 {
+		y = append(make([]byte, diff), y...)
+	} else if diff < 0 {
+		x = append(make([]byte, -diff), x...)
+	}
+
+	pub.Bytes = append([]byte{4}, x...)
+	pub.Bytes = append(pub.Bytes, y...)
+
+	k.PublicKey, _, err = marshal(&pub)
+	return
+}
+
+func (k *Key) readECDSAPrivateKey() (*ecdsa.PrivateKey, error) {
 	publicKey, err := k.readECDSAPublicKey()
 	if err != nil {
 		return nil, err
 	}
 
 	var priv *big.Int
-	err = unmarshal(k.PrivateKey, &priv, k.Encryption != "none")
+	k.keySize, err = unmarshal(k.PrivateKey, &priv, k.padded)
 	if err != nil {
 		return nil, err
 	}
@@ -86,4 +124,14 @@ func (k Key) readECDSAPrivateKey() (*ecdsa.PrivateKey, error) {
 	}
 
 	return privateKey, nil
+}
+
+func (k *Key) setECDSAPrivateKey(pk *ecdsa.PrivateKey) (err error) {
+	err = k.setECDSAPublicKey(&pk.PublicKey)
+	if err != nil {
+		return
+	}
+	k.PrivateKey, k.keySize, err = marshal(&pk.D)
+	k.padded = true
+	return
 }

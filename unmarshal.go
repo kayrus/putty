@@ -10,22 +10,36 @@ import (
 	"reflect"
 )
 
-func unmarshal(data []byte, val interface{}, enc bool) error {
+func unmarshal(data []byte, val interface{}, padded bool) (keysize int, err error) {
 	v := reflect.ValueOf(val).Elem()
 	buf := bytes.NewReader(data)
 
-	err := parseField(v, buf)
+	err = parseField(v, buf)
 	if err != nil {
-		return err
+		return
+	}
+
+	// get the actual keysize
+	var size int64
+	size, err = buf.Seek(0, io.SeekCurrent)
+	keysize = int(size)
+	if err != nil {
+		return
 	}
 
 	// check key block size
-	err = checkGarbage(buf, enc)
-	if err != nil {
-		return fmt.Errorf("wrong key size: %s", err)
+	paddedSize := size
+	if padded {
+		// normalize the size of the decrypted part (should be % aes.BlockSize)
+		paddedSize = size + aes.BlockSize - size&(aes.BlockSize-1)
 	}
 
-	return nil
+	// check key size
+	if buf.Size() != paddedSize {
+		return 0, fmt.Errorf("wrong key size, expected %d, got %d", paddedSize, buf.Size())
+	}
+
+	return
 }
 
 func parseField(v reflect.Value, src *bytes.Reader) error {
@@ -120,23 +134,4 @@ func readBigInt(src *bytes.Reader) (*big.Int, error) {
 	}
 
 	return new(big.Int).SetBytes(b), nil
-}
-
-func checkGarbage(src *bytes.Reader, encrypted bool) error {
-	pos, err := src.Seek(0, io.SeekCurrent)
-	if err != nil {
-		return err
-	}
-
-	if encrypted {
-		// normalize the size of the decrypted part (should be % aes.BlockSize)
-		pos = pos + aes.BlockSize - pos&(aes.BlockSize-1)
-	}
-
-	// check key size
-	if src.Size() != pos {
-		return fmt.Errorf("expected %d, got %d", pos, src.Size())
-	}
-
-	return nil
 }

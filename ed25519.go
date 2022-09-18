@@ -10,7 +10,7 @@ func (k Key) readED25519PublicKey() (*ed25519.PublicKey, error) {
 		Header string
 		Bytes  []byte
 	}
-	err := unmarshal(k.PublicKey, &pub, false)
+	_, err := unmarshal(k.PublicKey, &pub, false)
 	if err != nil {
 		return nil, err
 	}
@@ -26,14 +26,26 @@ func (k Key) readED25519PublicKey() (*ed25519.PublicKey, error) {
 	return (*ed25519.PublicKey)(&pub.Bytes), nil
 }
 
-func (k Key) readED25519PrivateKey() (*ed25519.PrivateKey, error) {
+func (k *Key) setED25519PublicKey(pk *ed25519.PublicKey) (err error) {
+	var pub struct {
+		Header string
+		Bytes  []byte
+	}
+	k.Algo = "ssh-ed25519"
+	pub.Header = k.Algo
+	pub.Bytes = ([]byte)(*pk)
+	k.PublicKey, _, err = marshal(&pub)
+	return
+}
+
+func (k *Key) readED25519PrivateKey() (*ed25519.PrivateKey, error) {
 	publicKey, err := k.readED25519PublicKey()
 	if err != nil {
 		return nil, err
 	}
 
 	var priv []byte
-	err = unmarshal(k.PrivateKey, &priv, k.Encryption != "none")
+	k.keySize, err = unmarshal(k.PrivateKey, &priv, k.padded)
 	if err != nil {
 		return nil, err
 	}
@@ -47,4 +59,18 @@ func (k Key) readED25519PrivateKey() (*ed25519.PrivateKey, error) {
 	}
 
 	return &privateKey, nil
+}
+
+func (k *Key) setED25519PrivateKey(pk *ed25519.PrivateKey) (err error) {
+	bytes := ([]byte)(*pk)
+	cut := ed25519.PrivateKeySize - ed25519.PublicKeySize
+	pub := bytes[cut:]
+	err = k.setED25519PublicKey((*ed25519.PublicKey)(&pub))
+	if err != nil {
+		return err
+	}
+
+	priv := bytes[:cut]
+	k.PrivateKey, k.keySize, err = marshal(&priv)
+	return
 }
