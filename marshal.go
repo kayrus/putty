@@ -10,13 +10,12 @@ import (
 	"reflect"
 )
 
-func marshal(val interface{}) (data []byte, keySize int, err error) {
+func marshal(val interface{}) (data []byte, err error) {
 	v := reflect.ValueOf(val).Elem()
 	buf := bytes.NewBuffer([]byte{})
 
 	err = writeField(v, buf)
 	data = buf.Bytes()
-	keySize = buf.Len()
 	return
 }
 
@@ -26,7 +25,8 @@ func addPadding(data []byte) []byte {
 		return data
 	}
 	sha := sha1.Sum(data)
-	data = append(data, make([]byte, aes.BlockSize-keySize&(aes.BlockSize-1))...)
+	padSize := aes.BlockSize - keySize&(aes.BlockSize-1)
+	data = append(data, make([]byte, padSize)...)
 	copy(data[keySize:], sha[:])
 	return data
 }
@@ -96,7 +96,7 @@ func writeString(dst *bytes.Buffer, data string) error {
 
 func writeBigInt(dst *bytes.Buffer, data *big.Int) error {
 	b := data.Bytes()
-	if len(b) > 8 && b[0] >= 128 {
+	if (len(b) > 8 && b[0] >= 128) || len(b) == 2 || len(b) == 3 {
 		b = append([]byte{0}, b...)
 	}
 	return writeBytes(dst, b)

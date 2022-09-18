@@ -39,7 +39,7 @@ func (k *Key) setRSAPublicKey(pk *rsa.PublicKey) (err error) {
 	pub.Header = "ssh-rsa"
 	pub.E = big.NewInt(int64(pk.E))
 	pub.N = pk.N
-	k.PublicKey, _, err = marshal(&pub)
+	k.PublicKey, err = marshal(&pub)
 	return
 }
 
@@ -103,6 +103,8 @@ func (k *Key) setRSAPrivateKey(pk *rsa.PrivateKey) (err error) {
 	priv.P1 = pk.Primes[0]
 	priv.P2 = pk.Primes[1]
 	priv.Qinv = pk.Precomputed.Qinv
-	k.PrivateKey, k.keySize, err = marshal(&priv)
+	k.PrivateKey, err = marshal(&priv)
+	k.keySize = len(k.PrivateKey)
+	k.padded = false
 	return
 }

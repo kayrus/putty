@@ -66,22 +66,22 @@ func (k Key) Clone() *Key {
 	return &Key{
 		Version:           k.Version,
 		Algo:              k.Algo,
-		PublicKey:         k.PublicKey,
-		PrivateKey:        k.PrivateKey,
+		PublicKey:         append([]byte{}, k.PublicKey...),
+		PrivateKey:        append([]byte{}, k.PrivateKey...),
 		KeyDerivation:     k.KeyDerivation,
 		Argon2Memory:      k.Argon2Memory,
 		Argon2Passes:      k.Argon2Passes,
 		Argon2Parallelism: k.Argon2Parallelism,
-		Argon2Salt:        k.Argon2Salt,
+		Argon2Salt:        append([]byte{}, k.Argon2Salt...),
 		Comment:           k.Comment,
 		Encryption:        k.Encryption,
-		PrivateMac:        k.PrivateMac,
-		//padded:            k.padded,
-		keySize: k.keySize,
+		PrivateMac:        append([]byte{}, k.PrivateMac...),
+		padded:            k.padded,
+		keySize:           k.keySize,
 	}
 }
 
-var noLines = strings.NewReplacer("\r", "", "\n", "")
+var noNewLines = strings.NewReplacer("\r", "", "\n", "")
 
 // Marshal returns the key in the raw ppk format for saving to a file.
 func (k *Key) Marshal() (ret []byte, err error) {
@@ -114,7 +114,7 @@ func (k *Key) Marshal() (ret []byte, err error) {
 	if k.Comment == "" {
 		k.Comment = "PuTTY key"
 	}
-	fmt.Fprintf(buf, "Comment: %s\r\n", noLines.Replace(k.Comment))
+	fmt.Fprintf(buf, "Comment: %s\r\n", noNewLines.Replace(k.Comment))
 
 	pub := splitByWidth(base64.StdEncoding.EncodeToString(k.PublicKey), 64)
 	fmt.Fprintf(buf, "Public-Lines: %d\r\n", len(pub))
@@ -769,7 +769,7 @@ func (k *Key) decrypt(password []byte) (err error) {
 // Encrypt encrypts the key and updates the HMAC
 func (k *Key) Encrypt(random io.Reader, password []byte) error {
 	if k.Encryption != "none" {
-		return fmt.Errorf("First decrypt the key before you can encrypt it")
+		return fmt.Errorf("decrypt the key first, then encrypt it")
 	}
 	if len(password) == 0 {
 		return fmt.Errorf("no password provided")

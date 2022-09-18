@@ -34,7 +34,7 @@ func (k *Key) setED25519PublicKey(pk *ed25519.PublicKey) (err error) {
 	k.Algo = "ssh-ed25519"
 	pub.Header = k.Algo
 	pub.Bytes = ([]byte)(*pk)
-	k.PublicKey, _, err = marshal(&pub)
+	k.PublicKey, err = marshal(&pub)
 	return
 }
 
@@ -71,6 +71,8 @@ func (k *Key) setED25519PrivateKey(pk *ed25519.PrivateKey) (err error) {
 	}
 
 	priv := bytes[:cut]
-	k.PrivateKey, k.keySize, err = marshal(&priv)
+	k.PrivateKey, err = marshal(&priv)
+	k.keySize = len(k.PrivateKey)
+	k.padded = false
 	return
 }

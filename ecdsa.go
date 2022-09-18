@@ -86,7 +86,7 @@ func (k *Key) setECDSAPublicKey(pk *ecdsa.PublicKey) (err error) {
 	pub.Bytes = append([]byte{4}, x...)
 	pub.Bytes = append(pub.Bytes, y...)
 
-	k.PublicKey, _, err = marshal(&pub)
+	k.PublicKey, err = marshal(&pub)
 	return
 }
 
@@ -131,7 +131,8 @@ func (k *Key) setECDSAPrivateKey(pk *ecdsa.PrivateKey) (err error) {
 	if err != nil {
 		return
 	}
-	k.PrivateKey, k.keySize, err = marshal(&pk.D)
-	k.padded = true
+	k.PrivateKey, err = marshal(&pk.D)
+	k.keySize = len(k.PrivateKey)
+	k.padded = false
 	return
 }

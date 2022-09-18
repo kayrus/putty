@@ -430,7 +430,7 @@ Comment: a@b`
 
 	reader = strings.NewReader(privateKeyContent)
 	_, err = decodeFields(bufio.NewReader(reader))
-	if err == nil {
+	if err != nil {
 		t.Errorf("Should have identified old key format")
 	}
 

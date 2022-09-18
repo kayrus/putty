@@ -35,7 +35,7 @@ func (k Key) readDSAPublicKey() (*dsa.PublicKey, error) {
 	return publicKey, nil
 }
 
-func (k *Key) setDSAPublicKey(pk *dsa.PublicKey) (err error) {
+func (k *Key) setDSAPublicKey(toSet *dsa.PublicKey) (err error) {
 	var pub struct {
 		Header string
 		P      *big.Int
@@ -45,11 +45,11 @@ func (k *Key) setDSAPublicKey(pk *dsa.PublicKey) (err error) {
 	}
 	k.Algo = "ssh-dss"
 	pub.Header = k.Algo
-	pub.P = pk.Parameters.P
-	pub.Q = pk.Parameters.Q
-	pub.G = pk.Parameters.G
-	pub.Pub = pk.Y
-	k.PublicKey, _, err = marshal(&pub)
+	pub.P = toSet.Parameters.P
+	pub.Q = toSet.Parameters.Q
+	pub.G = toSet.Parameters.G
+	pub.Pub = toSet.Y
+	k.PublicKey, err = marshal(&pub)
 	return
 }
 
@@ -81,6 +81,8 @@ func (k *Key) setDSAPrivateKey(pk *dsa.PrivateKey) (err error) {
 
 	var priv *big.Int
 	priv = pk.X
-	k.PrivateKey, k.keySize, err = marshal(&priv)
+	k.PrivateKey, err = marshal(&priv)
+	k.keySize = len(k.PrivateKey)
+	k.padded = false
 	return
 }
