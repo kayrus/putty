@@ -85,6 +85,8 @@ var noNewLines = strings.NewReplacer("\r", "", "\n", "")
 
 // Marshal returns the key in the raw ppk format for saving to a file.
 func (k *Key) Marshal() (ret []byte, err error) {
+	// Helpful notes about the putty formats:
+	// https://tartarus.org/~simon/putty-snapshots/htmldoc/AppendixC.html
 	buf := new(bytes.Buffer)
 	switch k.Version {
 	case 1:
@@ -747,9 +749,13 @@ func (k *Key) decrypt(password []byte) (err error) {
 	// validate key signature
 	switch k.Version {
 	case 1:
-		h := sha1.New().Sum(k.PrivateKey)
-		if !bytes.Equal(h, k.PrivateMac) {
-			return fmt.Errorf("calculated SHA1 sum %q doesn't correspond to %q", hex.EncodeToString(h), hex.EncodeToString(k.PrivateMac))
+		if k.Encryption == "none" {
+			h := sha1.New().Sum(k.PrivateKey)
+			if !bytes.Equal(h, k.PrivateMac) {
+				return fmt.Errorf("calculated SHA1 sum %q doesn't correspond to %q", hex.EncodeToString(h), hex.EncodeToString(k.PrivateMac))
+			}
+		} else {
+			err = k.validateHMAC(hmac.New(sha1.New, addPadding(k.PrivateMac)))
 		}
 		return nil
 	case 2:

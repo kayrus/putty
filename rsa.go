@@ -102,6 +102,10 @@ func (k *Key) setRSAPrivateKey(pk *rsa.PrivateKey) (err error) {
 	priv.D = pk.D
 	priv.P1 = pk.Primes[0]
 	priv.P2 = pk.Primes[1]
+	// Make sure p > q
+	if priv.P1.Cmp(priv.P2) != 1 {
+		priv.P1, priv.P2 = priv.P2, priv.P1
+	}
 	priv.Qinv = pk.Precomputed.Qinv
 	k.PrivateKey, err = marshal(&priv)
 	k.keySize = len(k.PrivateKey)
