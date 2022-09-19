@@ -146,7 +146,7 @@ func (k *Key) Marshal() (ret []byte, err error) {
 		if k.Encryption == "none" {
 			k.calculateHMAC(nil)
 		}
-		if k.Version == 1 {
+		if k.Version == 1 && k.Encryption == "none" {
 			fmt.Fprintf(buf, "Private-Hash: %0x", k.PrivateMac)
 		} else {
 			fmt.Fprintf(buf, "Private-MAC: %0x", k.PrivateMac)
@@ -627,8 +627,12 @@ func (k *Key) calculateHMAC(password []byte) error {
 	var hashFunc hash.Hash
 	switch k.Version {
 	case 1:
-		k.PrivateMac = sha1.New().Sum(k.PrivateKey)
-		return nil
+		if k.Encryption == "none" {
+			k.PrivateMac = sha1.New().Sum(k.PrivateKey)
+			return nil
+		} else {
+			hashFunc = hmac.New(sha1.New, addPadding(k.PrivateMac))
+		}
 	case 2:
 		hashFunc = hmac.New(sha1.New, macKey)
 	case 3:
@@ -754,10 +758,10 @@ func (k *Key) decrypt(password []byte) (err error) {
 			if !bytes.Equal(h, k.PrivateMac) {
 				return fmt.Errorf("calculated SHA1 sum %q doesn't correspond to %q", hex.EncodeToString(h), hex.EncodeToString(k.PrivateMac))
 			}
+			return nil
 		} else {
 			err = k.validateHMAC(hmac.New(sha1.New, addPadding(k.PrivateMac)))
 		}
-		return nil
 	case 2:
 		err = k.validateHMAC(hmac.New(sha1.New, macKey))
 	case 3:
