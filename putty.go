@@ -93,7 +93,8 @@ func (k *Key) Marshal() (ret []byte, err error) {
 		buf.WriteString(puttyHeaderV1)
 	case 2:
 		buf.WriteString(puttyHeaderV2)
-	case 3:
+	case 3, 0:
+		k.Version = 3
 		buf.WriteString(puttyHeaderV3)
 	default:
 		return ret, fmt.Errorf("PuTTY key format verion needs to be set to 1, 2, or 3")
@@ -216,29 +217,34 @@ func New(b []byte) (*Key, error) {
 }
 
 // SetPrivateKey sets the private key.  It supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
-func (k *Key) SetKey(key interface{}) error {
+func (k *Key) SetKey(key interface{}) (err error) {
 	switch PrivateKey := key.(type) {
 	case *rsa.PrivateKey:
-		return k.setRSAPrivateKey(PrivateKey)
+		err = k.setRSAPrivateKey(PrivateKey)
 	case rsa.PrivateKey:
-		return k.setRSAPrivateKey(&PrivateKey)
+		err = k.setRSAPrivateKey(&PrivateKey)
 
 	case *dsa.PrivateKey:
-		return k.setDSAPrivateKey(PrivateKey)
+		err = k.setDSAPrivateKey(PrivateKey)
 	case dsa.PrivateKey:
-		return k.setDSAPrivateKey(&PrivateKey)
+		err = k.setDSAPrivateKey(&PrivateKey)
 
 	case *ecdsa.PrivateKey:
-		return k.setECDSAPrivateKey(PrivateKey)
+		err = k.setECDSAPrivateKey(PrivateKey)
 	case ecdsa.PrivateKey:
-		return k.setECDSAPrivateKey(&PrivateKey)
+		err = k.setECDSAPrivateKey(&PrivateKey)
 
 	case *ed25519.PrivateKey:
-		return k.setED25519PrivateKey(PrivateKey)
+		err = k.setED25519PrivateKey(PrivateKey)
 	case ed25519.PrivateKey:
-		return k.setED25519PrivateKey(&PrivateKey)
+		err = k.setED25519PrivateKey(&PrivateKey)
+	default:
+		return fmt.Errorf("Unknown key type: %T", key)
 	}
-	return fmt.Errorf("Unknown key type: %T", key)
+	if err == nil {
+		k.Encryption = "none"
+	}
+	return
 }
 
 // ParseRawPrivateKey returns a private key from a PuTTY encoded private key. It
@@ -774,6 +780,12 @@ func (k *Key) decrypt(password []byte) (err error) {
 
 // Encrypt encrypts the key and updates the HMAC
 func (k *Key) Encrypt(random io.Reader, password []byte) error {
+	// Set a sensible value for an unset version number
+	if k.Version == 0 {
+		k.Version = 3
+	} else if k.Version > 3 || k.Version < 0 {
+		return fmt.Errorf("unknown putty key version")
+	}
 	if k.Encryption != "none" {
 		return fmt.Errorf("decrypt the key first, then encrypt it")
 	}

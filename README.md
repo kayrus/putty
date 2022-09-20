@@ -36,6 +36,15 @@ func main() {
 		}
 	}
 
+  // init an empty public key with version 3
+  outKey := putty.Key{Version: 3}
+
+  // set the private key
+  outKey.SetKey(privateKey)
+
+  // print out the ppk file
+  fmt.Printf("%s\n", outKey.Marshal())
+
 	log.Printf("%+#v", privateKey)
 }
 ```
