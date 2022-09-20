@@ -217,26 +217,26 @@ func New(b []byte) (*Key, error) {
 
 // SetPrivateKey sets the private key.  It supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
 func (k *Key) SetKey(key interface{}) error {
-	switch pk := key.(type) {
+	switch PrivateKey := key.(type) {
 	case *rsa.PrivateKey:
-		return k.setRSAPrivateKey(pk)
+		return k.setRSAPrivateKey(PrivateKey)
 	case rsa.PrivateKey:
-		return k.setRSAPrivateKey(&pk)
+		return k.setRSAPrivateKey(&PrivateKey)
 
 	case *dsa.PrivateKey:
-		return k.setDSAPrivateKey(pk)
+		return k.setDSAPrivateKey(PrivateKey)
 	case dsa.PrivateKey:
-		return k.setDSAPrivateKey(&pk)
+		return k.setDSAPrivateKey(&PrivateKey)
 
 	case *ecdsa.PrivateKey:
-		return k.setECDSAPrivateKey(pk)
+		return k.setECDSAPrivateKey(PrivateKey)
 	case ecdsa.PrivateKey:
-		return k.setECDSAPrivateKey(&pk)
+		return k.setECDSAPrivateKey(&PrivateKey)
 
 	case *ed25519.PrivateKey:
-		return k.setED25519PrivateKey(pk)
+		return k.setED25519PrivateKey(PrivateKey)
 	case ed25519.PrivateKey:
-		return k.setED25519PrivateKey(&pk)
+		return k.setED25519PrivateKey(&PrivateKey)
 	}
 	return fmt.Errorf("Unknown key type: %T", key)
 }
