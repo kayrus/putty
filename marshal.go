@@ -51,19 +51,19 @@ func writeField(v reflect.Value, dst *bytes.Buffer) error {
 
 	switch fieldType {
 	case reflect.TypeOf(string("")):
-		err := writeString(dst, v.String())
+		err := writeString2(dst, v.String())
 		if err != nil {
 			return err
 		}
 	case reflect.TypeOf([]byte(nil)):
-		err := writeBytes(dst, v.Bytes())
+		err := writeBytes2(dst, v.Bytes())
 		if err != nil {
 			return err
 		}
 	case reflect.TypeOf(new(big.Int)):
 		switch val := (v.Interface()).(type) {
 		case *big.Int:
-			err := writeBigInt(dst, val)
+			err := writeBigInt2(dst, val)
 			if err != nil {
 				return err
 			}
@@ -77,7 +77,30 @@ func writeField(v reflect.Value, dst *bytes.Buffer) error {
 	return nil
 }
 
-func writeBytes(dst *bytes.Buffer, data []byte) error {
+func writeBytes1(dst *bytes.Buffer, data []byte, length uint16) error {
+	//length := uint16(len(data) * 8)
+	// write 4 bytes (data size) of the next element size
+	err := binary.Write(dst, binary.BigEndian, &length)
+	if err != nil {
+		return err
+	}
+
+	_, err = dst.Write(data)
+
+	return err
+}
+
+func writeBigInt1(dst *bytes.Buffer, data *big.Int) error {
+	b := data.Bytes()
+
+	return writeBytes1(dst, b, uint16(data.BitLen()))
+}
+
+func writeInt32(dst *bytes.Buffer, val uint32) error {
+	return binary.Write(dst, binary.BigEndian, &val)
+}
+
+func writeBytes2(dst *bytes.Buffer, data []byte) error {
 	length := uint32(len(data))
 	// write 4 bytes (data size) of the next element size
 	err := binary.Write(dst, binary.BigEndian, &length)
@@ -90,14 +113,14 @@ func writeBytes(dst *bytes.Buffer, data []byte) error {
 	return err
 }
 
-func writeString(dst *bytes.Buffer, data string) error {
-	return writeBytes(dst, []byte(data))
+func writeString2(dst *bytes.Buffer, data string) error {
+	return writeBytes2(dst, []byte(data))
 }
 
-func writeBigInt(dst *bytes.Buffer, data *big.Int) error {
+func writeBigInt2(dst *bytes.Buffer, data *big.Int) error {
 	b := data.Bytes()
-	if (len(b) > 8 && b[0] >= 128) || len(b) == 2 || len(b) == 3 {
+	for (len(b) > 8 && b[0] >= 128) || len(b) == 2 || len(b) == 3 {
 		b = append([]byte{0}, b...)
 	}
-	return writeBytes(dst, b)
+	return writeBytes2(dst, b)
 }

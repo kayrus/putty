@@ -1,3 +1,6 @@
+github.com/pschou/go-cbc3 v0.0.0-20220927161413-29a957308e2d/go.mod h1:b5sRQXy0ZdH7/nBD+FLWT4W+R4OIgNTw4rM9o/+XeKc=
+github.com/pschou/go-cbc3 v0.0.0-20221001011156-4e1428fbe50c h1:dk8hPEU14qkDRAfX/Lzt0N63I/2iW+vYlZecK7Vkc+4=
+github.com/pschou/go-cbc3 v0.0.0-20221001011156-4e1428fbe50c/go.mod h1:e5fPLORCNq9grPyodp74EPO3uxyrZUEjXWCErhGMlLI=
 golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a h1:kr2P4QFmQr29mSLA43kwrOcgcReGTfbE9N577tCTuBc=
 golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a/go.mod h1:P+XmwS30IXTQdn5tA2iutPOUgjI07+tq3H3K9MVA1s8=
 golang.org/x/net v0.0.0-20210226172049-e18ecbb05110/go.mod h1:m0MpNAwzfU5UDzcl9v0D8zg8gWTRqZa9RBIspLL5mdg=
