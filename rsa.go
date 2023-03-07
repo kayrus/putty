@@ -12,7 +12,7 @@ func (k Key) readRSAPublicKey() (*rsa.PublicKey, error) {
 		E      *big.Int // pub exponent
 		N      *big.Int // pub modulus
 	}
-	err := unmarshal(k.PublicKey, &pub, false)
+	_, err := unmarshal(k.PublicKey, &pub, false)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,21 @@ func (k Key) readRSAPublicKey() (*rsa.PublicKey, error) {
 	return publicKey, nil
 }
 
-func (k Key) readRSAPrivateKey() (*rsa.PrivateKey, error) {
+func (k *Key) setRSAPublicKey(pk *rsa.PublicKey) (err error) {
+	var pub struct {
+		Header string   // header
+		E      *big.Int // pub exponent
+		N      *big.Int // pub modulus
+	}
+	k.Algo = "ssh-rsa"
+	pub.Header = "ssh-rsa"
+	pub.E = big.NewInt(int64(pk.E))
+	pub.N = pk.N
+	k.PublicKey, err = marshal(&pub)
+	return
+}
+
+func (k *Key) readRSAPrivateKey() (*rsa.PrivateKey, error) {
 	publicKey, err := k.readRSAPublicKey()
 	if err != nil {
 		return nil, err
@@ -41,7 +55,7 @@ func (k Key) readRSAPrivateKey() (*rsa.PrivateKey, error) {
 		P2   *big.Int // prime 2
 		Qinv *big.Int // Qinv
 	}
-	err = unmarshal(k.PrivateKey, &priv, k.Encryption != "none")
+	k.keySize, err = unmarshal(k.PrivateKey, &priv, k.padded)
 	if err != nil {
 		return nil, err
 	}
@@ -70,4 +84,31 @@ func (k Key) readRSAPrivateKey() (*rsa.PrivateKey, error) {
 	}
 
 	return privateKey, nil
+}
+
+func (k *Key) setRSAPrivateKey(pk *rsa.PrivateKey) (err error) {
+	err = k.setRSAPublicKey(&pk.PublicKey)
+	if err != nil {
+		return err
+	}
+
+	var priv struct {
+		D    *big.Int // private exponent
+		P1   *big.Int // prime 1
+		P2   *big.Int // prime 2
+		Qinv *big.Int // Qinv
+	}
+
+	priv.D = pk.D
+	priv.P1 = pk.Primes[0]
+	priv.P2 = pk.Primes[1]
+	// Make sure p > q
+	if priv.P1.Cmp(priv.P2) != 1 {
+		priv.P1, priv.P2 = priv.P2, priv.P1
+	}
+	priv.Qinv = pk.Precomputed.Qinv
+	k.PrivateKey, err = marshal(&priv)
+	k.keySize = len(k.PrivateKey)
+	k.padded = false
+	return
 }

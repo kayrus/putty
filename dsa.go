@@ -14,7 +14,7 @@ func (k Key) readDSAPublicKey() (*dsa.PublicKey, error) {
 		G      *big.Int
 		Pub    *big.Int
 	}
-	err := unmarshal(k.PublicKey, &pub, false)
+	_, err := unmarshal(k.PublicKey, &pub, false)
 	if err != nil {
 		return nil, err
 	}
@@ -35,14 +35,32 @@ func (k Key) readDSAPublicKey() (*dsa.PublicKey, error) {
 	return publicKey, nil
 }
 
-func (k Key) readDSAPrivateKey() (*dsa.PrivateKey, error) {
+func (k *Key) setDSAPublicKey(toSet *dsa.PublicKey) (err error) {
+	var pub struct {
+		Header string
+		P      *big.Int
+		Q      *big.Int
+		G      *big.Int
+		Pub    *big.Int
+	}
+	k.Algo = "ssh-dss"
+	pub.Header = k.Algo
+	pub.P = toSet.Parameters.P
+	pub.Q = toSet.Parameters.Q
+	pub.G = toSet.Parameters.G
+	pub.Pub = toSet.Y
+	k.PublicKey, err = marshal(&pub)
+	return
+}
+
+func (k *Key) readDSAPrivateKey() (*dsa.PrivateKey, error) {
 	publicKey, err := k.readDSAPublicKey()
 	if err != nil {
 		return nil, err
 	}
 
 	var priv *big.Int
-	err = unmarshal(k.PrivateKey, &priv, k.Encryption != "none")
+	k.keySize, err = unmarshal(k.PrivateKey, &priv, k.padded)
 	if err != nil {
 		return nil, err
 	}
@@ -53,4 +71,18 @@ func (k Key) readDSAPrivateKey() (*dsa.PrivateKey, error) {
 	}
 
 	return privateKey, nil
+}
+
+func (k *Key) setDSAPrivateKey(pk *dsa.PrivateKey) (err error) {
+	err = k.setDSAPublicKey(&pk.PublicKey)
+	if err != nil {
+		return err
+	}
+
+	var priv *big.Int
+	priv = pk.X
+	k.PrivateKey, err = marshal(&priv)
+	k.keySize = len(k.PrivateKey)
+	k.padded = false
+	return
 }

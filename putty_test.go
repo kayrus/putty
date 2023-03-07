@@ -9,7 +9,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rsa"
 	"encoding/hex"
-	"fmt"
 	"math/big"
 	"reflect"
 	"strings"
@@ -431,7 +430,7 @@ Comment: a@b`
 
 	reader = strings.NewReader(privateKeyContent)
 	_, err = decodeFields(bufio.NewReader(reader))
-	if err == nil {
+	if err != nil {
 		t.Errorf("Should have identified old key format")
 	}
 
@@ -455,6 +454,44 @@ func TestKey_Load(t *testing.T) {
 		return
 	}
 	validateFields(t, key, mac1)
+}
+
+func TestKey_WriteRsa(t *testing.T) {
+	key := &Key{
+		Version:    2,
+		Algo:       "ssh-rsa",
+		Encryption: "none",
+		Comment:    "a@b",
+		PrivateMac: mac1,
+	}
+	N, _ := big.NewInt(0).SetString("8899603823917657073993455955247192742235475556705611494844755637605909744142362852675956970710170381872286959792213615771125246580768745178396163419345147", 10)
+	D, _ := big.NewInt(0).SetString("1202649165394277982972088642600971992193983183338596147951994005081879695154347826520147831485495538539062697907166363205375939469504219407479989786042173", 10)
+	P1, _ := big.NewInt(0).SetString("99432035046298583655632173300307896812294295981612330336064741365252891422281", 10)
+	P2, _ := big.NewInt(0).SetString("89504391816719133847764509922687382370233755361682176101456821678986111210787", 10)
+	Qinv, _ := big.NewInt(0).SetString("58739399210597955282522708421744401703943010346410985856809409636285000886096", 10)
+	key.setRSAPrivateKey(&rsa.PrivateKey{
+		PublicKey: rsa.PublicKey{
+			E: 37,
+			N: N,
+		},
+		D: D,
+		Primes: []*big.Int{
+			P1,
+			P2,
+		},
+		Precomputed: rsa.PrecomputedValues{
+			Qinv: Qinv,
+		},
+	})
+
+	b, err := key.Marshal()
+	if err != nil {
+		t.Errorf("error marshalling Key fields: %v", err)
+		return
+	}
+	if !bytes.Equal([]byte(keyContent), cleanR(b)) {
+		t.Errorf("got:\n%s\n\nexpected:\n%s\n\n", string(b), keyContent)
+	}
 }
 
 func TestNew(t *testing.T) {
@@ -491,6 +528,7 @@ func validateFields(t *testing.T, key *Key, mac []byte) {
 		t.Error(err)
 		return
 	}
+	//fmt.Printf("k=%+v\n", k)
 }
 
 func TestParseRawPrivateKey(t *testing.T) {
@@ -501,8 +539,14 @@ func TestParseRawPrivateKey(t *testing.T) {
 			continue
 		}
 
+		enc, err := key.Marshal()
+		if strings.TrimSpace(fixture.content) != strings.ReplaceAll(
+			strings.TrimSpace(string(enc)), "\r", "") {
+		}
+
 		v, err := key.ParseRawPrivateKey(fixture.password)
 		if err != nil {
+			//t.Errorf("Expect:\n%s\nGot:\n%s", fixture.content, string(enc))
 			t.Errorf("error decrypting key #%d: %v", i, err)
 			continue
 		}
@@ -510,11 +554,43 @@ func TestParseRawPrivateKey(t *testing.T) {
 		switch v := v.(type) {
 		case *dsa.PrivateKey, *rsa.PrivateKey, *ecdsa.PrivateKey, *ed25519.PrivateKey:
 			if !reflect.DeepEqual(v, fixture.data) {
-				fmt.Printf("RSA key: %#+v\n", v)
 				t.Errorf("error verifying a %T key #%d", v, i)
 			}
 		default:
 			t.Errorf("unknown %T key #%d type", v, i)
+		}
+		// Key is fully decoded now
+
+		// The key is decrypted now, let's re-encrypt to verify that all goes back to the same thing
+		if fixture.password != nil {
+			salt, err := hex.DecodeString(string("745d60746c67666afa47dbf23226c6c9"))
+			err = key.Encrypt(bytes.NewReader(salt), fixture.password)
+			if err != nil {
+				t.Errorf("error encrypting key #%d: %v", i, err)
+				continue
+			}
+		}
+		if key.Encryption == "none" {
+			salt, err := hex.DecodeString(string("745d60746c67666afa47dbf23226c6c9"))
+			err = key.Encrypt(bytes.NewReader(salt), []byte("testagain"))
+			if err != nil {
+				t.Errorf("error encrypting key #%d: %v", i, err)
+				continue
+			}
+			_, err = key.ParseRawPrivateKey([]byte("testagain"))
+			if err != nil {
+				t.Errorf("error decrypting key #%d: %v", i, err)
+				continue
+			}
+		}
+
+		enc, err = key.Marshal()
+		if err != nil {
+			t.Errorf("error marshalling key #%d: %v", i, err)
+			continue
+		}
+		if !bytes.Equal(cleanR([]byte(fixture.content)), cleanR(enc)) {
+			t.Errorf("Expect:\n%s\nGot:\n%s", fixture.content, string(enc))
 		}
 	}
 }
@@ -563,4 +639,7 @@ func TestLoadFromUrandom(t *testing.T) {
 		t.Errorf("reading from /dev/urandom must return an error")
 	}
 	t.Logf("%v", err)
+}
+func cleanR(s []byte) []byte {
+	return []byte(strings.ReplaceAll(strings.TrimSpace(string(s)), "\r", ""))
 }

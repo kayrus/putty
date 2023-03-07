@@ -5,7 +5,11 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/dsa"
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/hmac"
+	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
@@ -16,6 +20,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -53,7 +58,102 @@ type Key struct {
 	Comment           string
 	Encryption        string
 	PrivateMac        []byte
-	decrypted         bool
+	padded            bool
+	keySize           int
+}
+
+func (k Key) Clone() *Key {
+	return &Key{
+		Version:           k.Version,
+		Algo:              k.Algo,
+		PublicKey:         append([]byte{}, k.PublicKey...),
+		PrivateKey:        append([]byte{}, k.PrivateKey...),
+		KeyDerivation:     k.KeyDerivation,
+		Argon2Memory:      k.Argon2Memory,
+		Argon2Passes:      k.Argon2Passes,
+		Argon2Parallelism: k.Argon2Parallelism,
+		Argon2Salt:        append([]byte{}, k.Argon2Salt...),
+		Comment:           k.Comment,
+		Encryption:        k.Encryption,
+		PrivateMac:        append([]byte{}, k.PrivateMac...),
+		padded:            k.padded,
+		keySize:           k.keySize,
+	}
+}
+
+var noNewLines = strings.NewReplacer("\r", "", "\n", "")
+
+// Marshal returns the key in the raw ppk format for saving to a file.
+func (k *Key) Marshal() (ret []byte, err error) {
+	// Helpful notes about the putty formats:
+	// https://tartarus.org/~simon/putty-snapshots/htmldoc/AppendixC.html
+	buf := new(bytes.Buffer)
+	switch k.Version {
+	case 1:
+		buf.WriteString(puttyHeaderV1)
+	case 2:
+		buf.WriteString(puttyHeaderV2)
+	case 3, 0:
+		k.Version = 3
+		buf.WriteString(puttyHeaderV3)
+	default:
+		return ret, fmt.Errorf("PuTTY key format verion needs to be set to 1, 2, or 3")
+	}
+
+	switch k.Algo {
+	case "ssh-rsa",
+		"ecdsa-sha2-nistp256",
+		"ecdsa-sha2-nistp384",
+		"ecdsa-sha2-nistp521",
+		"ssh-dss",
+		"ssh-ed25519":
+		fmt.Fprintf(buf, ": %s\r\n", k.Algo)
+	default:
+		return ret, fmt.Errorf("invalid algorithm")
+	}
+
+	fmt.Fprintf(buf, "Encryption: %s\r\n", k.Encryption)
+
+	if k.Comment == "" {
+		k.Comment = "PuTTY key"
+	}
+	fmt.Fprintf(buf, "Comment: %s\r\n", noNewLines.Replace(k.Comment))
+
+	pub := splitByWidth(base64.StdEncoding.EncodeToString(k.PublicKey), 64)
+	fmt.Fprintf(buf, "Public-Lines: %d\r\n", len(pub))
+	fmt.Fprintf(buf, "%s\r\n", strings.Join(pub, "\r\n"))
+
+	if len(k.PrivateKey) > 0 {
+		if k.KeyDerivation != "" {
+			fmt.Fprintf(buf, "Key-Derivation: %s\r\n", k.KeyDerivation)
+		}
+		if k.Argon2Memory > 0 {
+			fmt.Fprintf(buf, "Argon2-Memory: %d\r\n", k.Argon2Memory)
+		}
+		if k.Argon2Passes > 0 {
+			fmt.Fprintf(buf, "Argon2-Passes: %d\r\n", k.Argon2Passes)
+		}
+		if k.Argon2Parallelism > 0 {
+			fmt.Fprintf(buf, "Argon2-Parallelism: %d\r\n", k.Argon2Parallelism)
+		}
+		if len(k.Argon2Salt) > 0 {
+			fmt.Fprintf(buf, "Argon2-Salt: %02x\r\n", k.Argon2Salt)
+		}
+
+		priv := splitByWidth(base64.StdEncoding.EncodeToString(k.PrivateKey), 64)
+		fmt.Fprintf(buf, "Private-Lines: %d\r\n", len(priv))
+		fmt.Fprintf(buf, "%s\r\n", strings.Join(priv, "\r\n"))
+
+		if k.Encryption == "none" {
+			k.calculateHMAC(nil)
+		}
+		if k.Version == 1 && k.Encryption == "none" {
+			fmt.Fprintf(buf, "Private-Hash: %0x", k.PrivateMac)
+		} else {
+			fmt.Fprintf(buf, "Private-MAC: %0x", k.PrivateMac)
+		}
+	}
+	return buf.Bytes(), nil
 }
 
 type reader interface {
@@ -116,32 +216,87 @@ func New(b []byte) (*Key, error) {
 	return k, nil
 }
 
+// SetPrivateKey sets the private key.  It supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
+func (k *Key) SetKey(key interface{}) (err error) {
+	switch PrivateKey := key.(type) {
+	case *rsa.PrivateKey:
+		err = k.setRSAPrivateKey(PrivateKey)
+	case rsa.PrivateKey:
+		err = k.setRSAPrivateKey(&PrivateKey)
+
+	case *dsa.PrivateKey:
+		err = k.setDSAPrivateKey(PrivateKey)
+	case dsa.PrivateKey:
+		err = k.setDSAPrivateKey(&PrivateKey)
+
+	case *ecdsa.PrivateKey:
+		err = k.setECDSAPrivateKey(PrivateKey)
+	case ecdsa.PrivateKey:
+		err = k.setECDSAPrivateKey(&PrivateKey)
+
+	case *ed25519.PrivateKey:
+		err = k.setED25519PrivateKey(PrivateKey)
+	case ed25519.PrivateKey:
+		err = k.setED25519PrivateKey(&PrivateKey)
+	default:
+		return fmt.Errorf("Unknown key type: %T", key)
+	}
+	if err == nil {
+		k.Encryption = "none"
+	}
+	return
+}
+
 // ParseRawPrivateKey returns a private key from a PuTTY encoded private key. It
 // supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
-func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
+func (k *Key) ParseRawPrivateKey(password []byte) (ret interface{}, err error) {
 	if k.Encryption != "none" && len(password) == 0 {
 		return nil, fmt.Errorf("expecting password")
 	}
 
-	err := k.decrypt(password)
+	// Fall back if an error happens
+	priv := append([]byte{}, k.PrivateKey...)
+	defer func() {
+		if err != nil {
+			k.PrivateKey = priv
+		} else {
+			if k.Version == 3 {
+				k.KeyDerivation = ""
+				k.Argon2Memory = 0
+				k.Argon2Passes = 0
+				k.Argon2Parallelism = 0
+				k.Argon2Salt = []byte{}
+			}
+			k.Encryption = "none"
+			if k.keySize == 0 {
+				k.keySize = len(k.PrivateKey)
+			} else {
+				k.PrivateKey = k.PrivateKey[:k.keySize]
+			}
+			k.calculateHMAC(nil)
+		}
+	}()
+
+	err = k.decrypt(password)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	switch k.Algo {
 	case "ssh-rsa":
-		return k.readRSAPrivateKey()
+		ret, err = k.readRSAPrivateKey()
 	case "ecdsa-sha2-nistp256",
 		"ecdsa-sha2-nistp384",
 		"ecdsa-sha2-nistp521":
-		return k.readECDSAPrivateKey()
+		ret, err = k.readECDSAPrivateKey()
 	case "ssh-dss":
-		return k.readDSAPrivateKey()
+		ret, err = k.readDSAPrivateKey()
 	case "ssh-ed25519":
-		return k.readED25519PrivateKey()
+		ret, err = k.readED25519PrivateKey()
+	default:
+		return nil, fmt.Errorf("unsupported key type %q", k.Algo)
 	}
-
-	return nil, fmt.Errorf("unsupported key type %q", k.Algo)
+	return
 }
 
 // ParseRawPublicKey returns a public key from a PuTTY encoded private key. It
@@ -273,7 +428,6 @@ func decodeFields(r reader) (*Key, error) {
 			switch h {
 			case puttyHeaderV1:
 				k.Version = 1
-				return nil, fmt.Errorf("PuTTY key format is too old")
 			case puttyHeaderV2:
 				k.Version = 2
 			case puttyHeaderV3:
@@ -298,7 +452,9 @@ func decodeFields(r reader) (*Key, error) {
 			// check the encryption format
 			switch string(b) {
 			case "none":
+				k.padded = false
 			case "aes256-cbc":
+				k.padded = true
 			default:
 				return nil, fmt.Errorf("invalid encryption format: %s", b)
 			}
@@ -431,12 +587,78 @@ func decryptCBC(cipherKey, cipherIV, macKey, ciphertext []byte) error {
 	// initialize AES 256 bit cipher
 	cipherBlock, err := aes.NewCipher(cipherKey)
 	if err != nil {
-		return fmt.Errorf("failed to initialize a cipher block: %v", err)
+		return fmt.Errorf("failed to initialize a cipher block for decrypt: %v", err)
 	}
 
 	// decrypt
 	cipher.NewCBCDecrypter(cipherBlock, cipherIV).CryptBlocks(ciphertext, ciphertext)
 
+	return nil
+}
+
+func encryptCBC(cipherKey, cipherIV, macKey, ciphertext []byte) error {
+	if len(ciphertext) < aes.BlockSize {
+		return fmt.Errorf("ciphertext is too short")
+	}
+
+	if len(ciphertext)%aes.BlockSize != 0 {
+		return fmt.Errorf("ciphertext is not a multiple of the block size")
+	}
+
+	// initialize AES 256 bit cipher
+	cipherBlock, err := aes.NewCipher(cipherKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize a cipher block for encrypt: %v", err)
+	}
+
+	// encrypt
+	cipher.NewCBCEncrypter(cipherBlock, cipherIV).CryptBlocks(ciphertext, ciphertext)
+
+	return nil
+}
+
+// calculateHMAC calculates PuTTY key HMAC with a hash function
+func (k *Key) calculateHMAC(password []byte) error {
+	_, _, macKey, err := k.deriveKeys(password)
+	if err != nil {
+		return err
+	}
+	keyCut := len(k.PrivateKey)
+	if k.Encryption == "none" {
+		if k.keySize == 0 {
+			k.keySize = len(k.PrivateKey)
+		}
+		keyCut = k.keySize
+	}
+	var hashFunc hash.Hash
+	switch k.Version {
+	case 1:
+		if k.Encryption == "none" {
+			k.PrivateMac = sha1.New().Sum(k.PrivateKey)
+			return nil
+		} else {
+			hashFunc = hmac.New(sha1.New, addPadding(k.PrivateMac))
+		}
+	case 2:
+		hashFunc = hmac.New(sha1.New, macKey)
+	case 3:
+		hashFunc = hmac.New(sha256.New, macKey)
+	default:
+		return fmt.Errorf("unknown key format version: %d", k.Version)
+	}
+
+	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Algo)))
+	hashFunc.Write([]byte(k.Algo))
+	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Encryption)))
+	hashFunc.Write([]byte(k.Encryption))
+	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Comment)))
+	hashFunc.Write([]byte(k.Comment))
+	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.PublicKey)))
+	hashFunc.Write(k.PublicKey)
+	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.PrivateKey[:keyCut])))
+	hashFunc.Write(k.PrivateKey)
+
+	k.PrivateMac = hashFunc.Sum(nil)
 	return nil
 }
 
@@ -473,7 +695,7 @@ func (k Key) deriveKeys(password []byte) ([]byte, []byte, []byte, error) {
 		macKey := sha1sum.Sum(nil)
 
 		var seq int
-		var k []byte
+		var kb []byte
 
 		// calculate and combine sha1 sums of each seq+password,
 		// then truncate them to a 32 bytes (256 bit CBC) key
@@ -481,21 +703,21 @@ func (k Key) deriveKeys(password []byte) ([]byte, []byte, []byte, error) {
 			t := []byte{0, 0, 0, byte(seq)}
 			t = append(t, password...)
 			h := sha1.Sum(t)
-			k = append(k, h[:]...)
-			if len(k) >= 32 {
+			kb = append(kb, h[:]...)
+			if len(kb) >= 32 {
 				break
 			}
 			seq++
 		}
 
-		if len(k) < cipherKeyLength {
+		if len(kb) < cipherKeyLength {
 			return nil, nil, nil, fmt.Errorf("invalid length of the calculated cipher key")
 		}
 
 		// zero IV
 		cipherIV := make([]byte, aes.BlockSize)
 
-		return k[:cipherKeyLength], cipherIV, macKey, nil
+		return kb[:cipherKeyLength], cipherIV, macKey, nil
 	}
 
 	var h []byte
@@ -519,24 +741,33 @@ func (k Key) deriveKeys(password []byte) ([]byte, []byte, []byte, error) {
 		nil
 }
 
-// decrypt decrypts the key, when it is encrypted. and validates its signature
-func (k *Key) decrypt(password []byte) error {
+// Decrypt decrypts the key, when it is encrypted. and validates its signature
+func (k *Key) decrypt(password []byte) (err error) {
 	cipherKey, cipherIV, macKey, err := k.deriveKeys(password)
 	if err != nil {
 		return err
 	}
 
 	// decrypt the key, when it is encrypted
-	if !k.decrypted && k.Encryption != "none" {
+	if k.Encryption != "none" {
 		err = decryptCBC(cipherKey, cipherIV, macKey, k.PrivateKey)
 		if err != nil {
 			return err
 		}
 	}
-	k.decrypted = true
 
 	// validate key signature
 	switch k.Version {
+	case 1:
+		if k.Encryption == "none" {
+			h := sha1.New().Sum(k.PrivateKey)
+			if !bytes.Equal(h, k.PrivateMac) {
+				return fmt.Errorf("calculated SHA1 sum %q doesn't correspond to %q", hex.EncodeToString(h), hex.EncodeToString(k.PrivateMac))
+			}
+			return nil
+		} else {
+			err = k.validateHMAC(hmac.New(sha1.New, addPadding(k.PrivateMac)))
+		}
 	case 2:
 		err = k.validateHMAC(hmac.New(sha1.New, macKey))
 	case 3:
@@ -544,9 +775,53 @@ func (k *Key) decrypt(password []byte) error {
 	default:
 		err = fmt.Errorf("unknown key format version: %d", k.Version)
 	}
+	return
+}
+
+// Encrypt encrypts the key and updates the HMAC
+func (k *Key) Encrypt(random io.Reader, password []byte) error {
+	// Set a sensible value for an unset version number
+	if k.Version == 0 {
+		k.Version = 3
+	} else if k.Version > 3 || k.Version < 0 {
+		return fmt.Errorf("unknown putty key version")
+	}
+	if k.Encryption != "none" {
+		return fmt.Errorf("decrypt the key first, then encrypt it")
+	}
+	if len(password) == 0 {
+		return fmt.Errorf("no password provided")
+	}
+	if k.keySize == 0 {
+		k.keySize = len(k.PrivateKey)
+	}
+	k.PrivateKey = addPadding(k.PrivateKey)
+	k.padded = true
+
+	if k.Version == 3 && k.KeyDerivation == "" {
+		k.KeyDerivation = "Argon2id"
+		k.Argon2Memory = 8192
+		k.Argon2Passes = 13
+		k.Argon2Parallelism = 1
+		salt := make([]byte, 16)
+		random.Read(salt)
+		k.Argon2Salt = salt
+	}
+
+	cipherKey, cipherIV, macKey, err := k.deriveKeys(password)
 	if err != nil {
 		return err
 	}
 
+	k.Encryption = "aes256-cbc"
+	err = k.calculateHMAC(password)
+	if err != nil {
+		return err
+	}
+
+	err = encryptCBC(cipherKey, cipherIV, macKey, k.PrivateKey)
+	if err != nil {
+		return err
+	}
 	return nil
 }
