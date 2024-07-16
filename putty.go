@@ -355,19 +355,19 @@ func decodeFields(r reader) (*Key, error) {
 					return nil, fmt.Errorf("the %q value is not supported in %q", k.KeyDerivation, h)
 				}
 			case "Argon2-Memory":
-				n, err := strconv.Atoi(string(b))
+				n, err := strconv.ParseInt(string(b), 10, 32)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get the %q number: %v", h, err)
 				}
 				k.Argon2Memory = uint32(n)
 			case "Argon2-Passes":
-				n, err := strconv.Atoi(string(b))
+				n, err := strconv.ParseInt(string(b), 10, 32)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get the %q number: %v", h, err)
 				}
 				k.Argon2Passes = uint32(n)
 			case "Argon2-Parallelism":
-				n, err := strconv.Atoi(string(b))
+				n, err := strconv.ParseInt(string(b), 10, 8)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get the %q number: %v", h, err)
 				}
