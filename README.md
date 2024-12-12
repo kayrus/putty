@@ -1,6 +1,6 @@
 # putty
 
-Go package to parse PuTTY private key formats. Go 1.22 or above is required.
+Go package to parse PuTTY private key formats. Go 1.23 or above is required.
 
 ## Example
 
