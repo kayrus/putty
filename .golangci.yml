@@ -1,0 +1,109 @@
+run:
+  deadline: 5m
+
+linters-settings:
+  staticcheck:
+    go: '1.23'
+  stylecheck:
+    go: '1.23'
+  gci:
+    local-prefixes: github.com/kayrus
+  goimports:
+    local-prefixes: github.com/kayrus
+  depguard:
+    rules:
+      prevent_unmaintained_packages:
+        list-mode: lax
+        files:
+          - $all
+          - "!$test"
+        deny:
+          - pkg: io/ioutil
+            desc: "replaced by io and os packages since Go 1.16: https://tip.golang.org/doc/go1.16#ioutil"
+
+linters:
+  fast: false
+  disable-all: true
+  enable:
+    - asciicheck
+    - bodyclose
+    - depguard
+    - dogsled
+    - errcheck
+    - exhaustive
+    - exportloopref
+    - gci
+    - godot
+    - gofmt
+    - goheader
+    - goimports
+    - gomodguard
+    - goprintffuncname
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - nolintlint
+    - prealloc
+    - staticcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unused
+    - whitespace
+#    - cyclop
+#    - dupl
+#    - durationcheck
+#    - errname
+#    - errorlint
+#    - exhaustivestruct
+#    - forbidigo
+#    - forcetypeassert
+#    - funlen
+#    - gochecknoglobals
+#    - gochecknoinits
+#    - gocognit
+#    - goconst
+#    - gocritic
+#    - gocyclo
+#    - godox
+#    - goerr113
+#    - gofumpt
+#    - golint
+#    - gomnd
+#    - gomoddirectives
+#    - gosec (gas)
+#    - gosimple (megacheck)
+#    - ifshort
+#    - importas
+#    - interfacer
+#    - lll
+#    - makezero
+#    - maligned
+#    - nestif
+#    - nilerr
+#    - nlreturn
+#    - noctx
+#    - paralleltest
+#    - predeclared
+#    - promlinter
+#    - revive
+#    - scopelint
+#    - sqlclosecheck
+#    - tagliatelle
+#    - testpackage
+#    - thelper
+#    - tparallel
+#    - unparam
+#    - wastedassign
+#    - wrapcheck
+#    - wsl
+
+issues:
+  exclude-rules:
+    - linters:
+        - staticcheck
+      text: "SA1019:"
+    - linters:
+        - stylecheck
+      text: "ST1005:"
