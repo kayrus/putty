@@ -1,5 +1,8 @@
 # putty
 
+![Test Status](https://github.com/kayrus/putty/actions/workflows/go-test.yml/badge.svg)
+![Linter Status](https://github.com/kayrus/putty/actions/workflows/golangci-lint.yml/badge.svg)
+
 Go package to parse PuTTY private key formats. Go 1.23 or above is required.
 
 ## Example
