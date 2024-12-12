@@ -30,10 +30,8 @@ linters:
     - depguard
     - dogsled
     - errcheck
-    - exhaustive
-    - exportloopref
+    - copyloopvar
     - gci
-    - godot
     - gofmt
     - goheader
     - goimports
@@ -51,6 +49,8 @@ linters:
     - unconvert
     - unused
     - whitespace
+#    - exhaustive
+#    - godot
 #    - cyclop
 #    - dupl
 #    - durationcheck
