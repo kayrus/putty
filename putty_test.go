@@ -446,7 +446,6 @@ Comment: a@b`
 	if err == nil {
 		t.Errorf("Invalid key algorithm")
 	}
-
 }
 
 func TestKey_Load(t *testing.T) {

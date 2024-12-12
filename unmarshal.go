@@ -44,6 +44,7 @@ func parseField(v reflect.Value, src *bytes.Reader) error {
 			}
 		}
 		return nil
+	default:
 	}
 
 	switch fieldType {

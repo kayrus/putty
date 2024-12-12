@@ -442,16 +442,46 @@ func decryptCBC(cipherKey, cipherIV, macKey, ciphertext []byte) error {
 
 // validateHMAC validates PuTTY key HMAC with a hash function
 func (k Key) validateHMAC(hashFunc hash.Hash) error {
-	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Algo)))
-	hashFunc.Write([]byte(k.Algo))
-	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Encryption)))
-	hashFunc.Write([]byte(k.Encryption))
-	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Comment)))
-	hashFunc.Write([]byte(k.Comment))
-	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.PublicKey)))
-	hashFunc.Write(k.PublicKey)
-	binary.Write(hashFunc, binary.BigEndian, uint32(len(k.PrivateKey)))
-	hashFunc.Write(k.PrivateKey)
+	err := binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Algo)))
+	if err != nil {
+		return err
+	}
+	_, err = hashFunc.Write([]byte(k.Algo))
+	if err != nil {
+		return err
+	}
+	err = binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Encryption)))
+	if err != nil {
+		return err
+	}
+	_, err = hashFunc.Write([]byte(k.Encryption))
+	if err != nil {
+		return err
+	}
+	err = binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Comment)))
+	if err != nil {
+		return err
+	}
+	_, err = hashFunc.Write([]byte(k.Comment))
+	if err != nil {
+		return err
+	}
+	err = binary.Write(hashFunc, binary.BigEndian, uint32(len(k.PublicKey)))
+	if err != nil {
+		return err
+	}
+	_, err = hashFunc.Write(k.PublicKey)
+	if err != nil {
+		return err
+	}
+	err = binary.Write(hashFunc, binary.BigEndian, uint32(len(k.PrivateKey)))
+	if err != nil {
+		return err
+	}
+	_, err = hashFunc.Write(k.PrivateKey)
+	if err != nil {
+		return err
+	}
 
 	mac := hashFunc.Sum(nil)
 	if !bytes.Equal(mac, k.PrivateMac) {
