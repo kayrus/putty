@@ -1,15 +1,12 @@
 run:
-  deadline: 5m
+  timeout: 5m
 
 linters-settings:
-  staticcheck:
-    go: '1.23'
-  stylecheck:
-    go: '1.23'
   gci:
-    local-prefixes: github.com/kayrus
-  goimports:
-    local-prefixes: github.com/kayrus
+    sections:
+      - standard
+      - default
+      - prefix(github.com/kayrus/putty)
   depguard:
     rules:
       prevent_unmaintained_packages:
