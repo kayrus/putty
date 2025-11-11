@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -54,6 +55,8 @@ type Key struct {
 	Encryption        string
 	PrivateMac        []byte
 	decrypted         bool
+	padded            bool
+	keySize           int
 }
 
 type reader interface {
@@ -304,6 +307,7 @@ func decodeFields(r reader) (*Key, error) {
 			}
 
 			k.Encryption = string(b)
+			k.padded = k.Encryption != "none"
 		case "Comment":
 			k.Comment = string(b)
 		case "Public-Lines",
@@ -579,4 +583,133 @@ func (k *Key) decrypt(password []byte) error {
 	}
 
 	return nil
+}
+
+// SetKey sets the private key from various key types (supports ED25519 only for now)
+func (k *Key) SetKey(key interface{}) error {
+	switch key := key.(type) {
+	case *ed25519.PrivateKey:
+		return k.setED25519PrivateKey(key)
+	default:
+		return fmt.Errorf("unsupported key type %T", key)
+	}
+}
+
+// Marshal converts the Key to PPK format
+func (k *Key) Marshal() ([]byte, error) {
+	if k.Version == 0 {
+		k.Version = 3
+	}
+
+	if k.Encryption == "" {
+		k.Encryption = "none"
+	}
+
+	// Calculate the MAC
+	var hashFunc hash.Hash
+	switch k.Version {
+	case 2:
+		sha1sum := sha1.New()
+		sha1sum.Write([]byte("putty-private-key-file-mac-key"))
+		macKey := sha1sum.Sum(nil)
+		hashFunc = hmac.New(sha1.New, macKey)
+	case 3:
+		hashFunc = hmac.New(sha256.New, make([]byte, macKeyLength))
+	default:
+		return nil, fmt.Errorf("unsupported key version %d", k.Version)
+	}
+
+	err := binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Algo)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = hashFunc.Write([]byte(k.Algo))
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Encryption)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = hashFunc.Write([]byte(k.Encryption))
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Write(hashFunc, binary.BigEndian, uint32(len(k.Comment)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = hashFunc.Write([]byte(k.Comment))
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Write(hashFunc, binary.BigEndian, uint32(len(k.PublicKey)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = hashFunc.Write(k.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Write(hashFunc, binary.BigEndian, uint32(len(k.PrivateKey)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = hashFunc.Write(k.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	k.PrivateMac = hashFunc.Sum(nil)
+
+	// Build the output
+	var buf bytes.Buffer
+
+	// Write header
+	switch k.Version {
+	case 2:
+		buf.WriteString(puttyHeaderV2)
+	case 3:
+		buf.WriteString(puttyHeaderV3)
+	}
+	buf.WriteString(": ")
+	buf.WriteString(k.Algo)
+	buf.WriteString("\n")
+
+	buf.WriteString("Encryption: ")
+	buf.WriteString(k.Encryption)
+	buf.WriteString("\n")
+
+	buf.WriteString("Comment: ")
+	buf.WriteString(k.Comment)
+	buf.WriteString("\n")
+
+	// Encode public key
+	pubKeyB64 := base64.StdEncoding.EncodeToString(k.PublicKey)
+	pubLines := splitByWidth(pubKeyB64, 64)
+	buf.WriteString(fmt.Sprintf("Public-Lines: %d\n", len(pubLines)))
+	for _, line := range pubLines {
+		buf.WriteString(line)
+		buf.WriteString("\n")
+	}
+
+	// Encode private key
+	privKeyB64 := base64.StdEncoding.EncodeToString(k.PrivateKey)
+	privLines := splitByWidth(privKeyB64, 64)
+	buf.WriteString(fmt.Sprintf("Private-Lines: %d\n", len(privLines)))
+	for _, line := range privLines {
+		buf.WriteString(line)
+		buf.WriteString("\n")
+	}
+
+	// Write MAC
+	if k.Version == 2 {
+		buf.WriteString("Private-MAC: ")
+	} else {
+		buf.WriteString("Private-MAC: ")
+	}
+	buf.WriteString(hex.EncodeToString(k.PrivateMac))
+	buf.WriteString("\n")
+
+	return buf.Bytes(), nil
 }

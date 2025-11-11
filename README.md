@@ -5,7 +5,7 @@
 
 Go package to parse PuTTY private key formats. Go 1.23 or above is required.
 
-## Example
+## Example - Reading PPK files
 
 ```go
 package main
@@ -40,5 +40,46 @@ func main() {
 	}
 
 	log.Printf("%+#v", privateKey)
+}
+```
+
+## Example - Converting OpenSSH ED25519 key to PPK format
+
+```go
+package main
+
+import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"fmt"
+	"log"
+
+	"github.com/kayrus/putty"
+)
+
+func main() {
+	// Generate or load an ED25519 private key
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create a new PPK key structure with version 3
+	outKey := putty.Key{Version: 3, Comment: "my-ed25519-key"}
+
+	// Set the private key
+	err = outKey.SetKey(&privateKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Marshal to PPK format
+	ppkBytes, err := outKey.Marshal()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Print the PPK file content
+	fmt.Printf("%s", ppkBytes)
 }
 ```

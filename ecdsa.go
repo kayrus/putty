@@ -14,7 +14,7 @@ func (k Key) readECDSAPublicKey() (*ecdsa.PublicKey, error) {
 		Length string
 		Bytes  []byte
 	}
-	err := unmarshal(k.PublicKey, &pub, false)
+	_, err := unmarshal(k.PublicKey, &pub, false)
 	if err != nil {
 		return nil, err
 	}
@@ -52,14 +52,14 @@ func (k Key) readECDSAPublicKey() (*ecdsa.PublicKey, error) {
 	return publicKey, nil
 }
 
-func (k Key) readECDSAPrivateKey() (*ecdsa.PrivateKey, error) {
+func (k *Key) readECDSAPrivateKey() (*ecdsa.PrivateKey, error) {
 	publicKey, err := k.readECDSAPublicKey()
 	if err != nil {
 		return nil, err
 	}
 
 	var priv *big.Int
-	err = unmarshal(k.PrivateKey, &priv, k.Encryption != "none")
+	k.keySize, err = unmarshal(k.PrivateKey, &priv, k.padded)
 	if err != nil {
 		return nil, err
 	}

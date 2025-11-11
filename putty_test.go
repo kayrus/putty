@@ -565,3 +565,55 @@ func TestLoadFromUrandom(t *testing.T) {
 	}
 	t.Logf("%v", err)
 }
+
+func TestSetKeyAndMarshal(t *testing.T) {
+	// Test ED25519 key conversion
+	ed25519Key := &ed25519.PrivateKey{0x0, 0xd8, 0xf7, 0x75, 0xba, 0x68, 0xaa, 0xf3, 0xa4, 0xa6, 0xa3, 0x0, 0xde, 0xfd, 0x49, 0x84, 0xaa, 0xfd, 0x87, 0x9, 0xd, 0x22, 0x29, 0xe0, 0xf, 0x87, 0xa0, 0x5f, 0xd7, 0x3a, 0xda, 0xaf, 0xc6, 0xf7, 0x37, 0xda, 0x5b, 0xa8, 0xca, 0x52, 0x25, 0x11, 0x5b, 0xfd, 0x61, 0x7c, 0x59, 0xcc, 0xfc, 0xd1, 0x28, 0x96, 0xf1, 0xe9, 0x96, 0xdd, 0xa2, 0xc5, 0xa9, 0xd4, 0x40, 0xae, 0xcf, 0xab}
+
+	// Create a new key
+	outKey := Key{Version: 3, Comment: "test-key"}
+
+	// Set the private key
+	err := outKey.SetKey(ed25519Key)
+	if err != nil {
+		t.Errorf("error setting key: %v", err)
+		return
+	}
+
+	// Marshal to PPK format
+	ppkBytes, err := outKey.Marshal()
+	if err != nil {
+		t.Errorf("error marshaling key: %v", err)
+		return
+	}
+
+	// Verify the output is not empty
+	if len(ppkBytes) == 0 {
+		t.Errorf("marshaled PPK is empty")
+		return
+	}
+
+	// Try to parse it back
+	parsedKey, err := New(ppkBytes)
+	if err != nil {
+		t.Errorf("error parsing marshaled key: %v", err)
+		return
+	}
+
+	// Verify the key algorithm
+	if parsedKey.Algo != "ssh-ed25519" {
+		t.Errorf("wrong algorithm: got %s, expected ssh-ed25519", parsedKey.Algo)
+	}
+
+	// Verify we can extract the private key
+	recoveredKey, err := parsedKey.ParseRawPrivateKey(nil)
+	if err != nil {
+		t.Errorf("error parsing private key: %v", err)
+		return
+	}
+
+	// Verify the recovered key matches the original
+	if !reflect.DeepEqual(recoveredKey, ed25519Key) {
+		t.Errorf("recovered key doesn't match original")
+	}
+}

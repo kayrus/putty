@@ -10,22 +10,28 @@ import (
 	"reflect"
 )
 
-func unmarshal(data []byte, val interface{}, enc bool) error {
+func unmarshal(data []byte, val interface{}, enc bool) (int, error) {
 	v := reflect.ValueOf(val).Elem()
 	buf := bytes.NewReader(data)
 
 	err := parseField(v, buf)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// check key block size
 	err = checkGarbage(buf, enc)
 	if err != nil {
-		return fmt.Errorf("wrong key size: %s", err)
+		return 0, fmt.Errorf("wrong key size: %s", err)
 	}
 
-	return nil
+	// get the current reader position
+	pos, err := buf.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(pos), nil
 }
 
 func parseField(v reflect.Value, src *bytes.Reader) error {

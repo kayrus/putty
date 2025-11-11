@@ -12,7 +12,7 @@ func (k Key) readRSAPublicKey() (*rsa.PublicKey, error) {
 		E      *big.Int // pub exponent
 		N      *big.Int // pub modulus
 	}
-	err := unmarshal(k.PublicKey, &pub, false)
+	_, err := unmarshal(k.PublicKey, &pub, false)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func (k Key) readRSAPublicKey() (*rsa.PublicKey, error) {
 	return publicKey, nil
 }
 
-func (k Key) readRSAPrivateKey() (*rsa.PrivateKey, error) {
+func (k *Key) readRSAPrivateKey() (*rsa.PrivateKey, error) {
 	publicKey, err := k.readRSAPublicKey()
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (k Key) readRSAPrivateKey() (*rsa.PrivateKey, error) {
 		P2   *big.Int // prime 2
 		Qinv *big.Int // Qinv
 	}
-	err = unmarshal(k.PrivateKey, &priv, k.Encryption != "none")
+	k.keySize, err = unmarshal(k.PrivateKey, &priv, k.padded)
 	if err != nil {
 		return nil, err
 	}
