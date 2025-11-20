@@ -1,7 +1,7 @@
 package putty
 
 import (
-	"crypto/dsa"
+	"crypto/dsa" //nolint:staticcheck // we need dsa for legacy key support
 	"fmt"
 	"math/big"
 )

@@ -68,7 +68,7 @@ func (k *Key) LoadFromFile(path string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	v, err := decodeFields(bufio.NewReader(f))
 	if err != nil {
@@ -118,7 +118,7 @@ func New(b []byte) (*Key, error) {
 
 // ParseRawPrivateKey returns a private key from a PuTTY encoded private key. It
 // supports RSA (PKCS#1), DSA (OpenSSL), ECDSA and ED25519 private keys.
-func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
+func (k *Key) ParseRawPrivateKey(password []byte) (any, error) {
 	if k.Encryption != "none" && len(password) == 0 {
 		return nil, fmt.Errorf("expecting password")
 	}
@@ -146,7 +146,7 @@ func (k *Key) ParseRawPrivateKey(password []byte) (interface{}, error) {
 
 // ParseRawPublicKey returns a public key from a PuTTY encoded private key. It
 // supports the same key types as ParseRawPrivateKey, and will work even if the private part is encrypted
-func (k *Key) ParseRawPublicKey() (interface{}, error) {
+func (k *Key) ParseRawPublicKey() (any, error) {
 	switch k.Algo {
 	case "ssh-rsa":
 		return k.readRSAPublicKey()
@@ -165,7 +165,7 @@ func (k *Key) ParseRawPublicKey() (interface{}, error) {
 
 // golang implementation of putty C read_header
 func readHeader(r reader) ([]byte, error) {
-	var length = maxHeaderLength
+	length := maxHeaderLength
 	var buf []byte
 
 	for {
@@ -331,8 +331,7 @@ func decodeFields(r reader) (*Key, error) {
 			} else {
 				k.PrivateKey = v
 			}
-		case "Private-Hash",
-			"Private-MAC":
+		case "Private-Hash", "Private-MAC":
 			// read hash or signature
 			if k.Version == 0 {
 				return nil, fmt.Errorf("cannot read %q without a header: %v", h, err)

@@ -3,7 +3,7 @@ package putty
 import (
 	"bufio"
 	"bytes"
-	"crypto/dsa"
+	"crypto/dsa" //nolint:staticcheck // we still need it for tests
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -35,7 +35,7 @@ type testKeyStruct struct {
 	content  string
 	keyType  string
 	password []byte
-	data     interface{}
+	data     any
 }
 
 var (
@@ -347,7 +347,6 @@ func Test_readHeader(t *testing.T) {
 	expectedHeaderFormat := "PuTTY-User-Key-File-2"
 	reader := strings.NewReader(header)
 	h, err := readHeader(bufio.NewReader(reader))
-
 	if err != nil {
 		t.Errorf("got=[%s], expected=[%s]: %v", h, expectedHeaderFormat, err)
 	}
