@@ -1,26 +1,10 @@
+version: "2"
+
 run:
   timeout: 5m
 
-linters-settings:
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/kayrus/putty)
-  depguard:
-    rules:
-      prevent_unmaintained_packages:
-        list-mode: lax
-        files:
-          - $all
-          - "!$test"
-        deny:
-          - pkg: io/ioutil
-            desc: "replaced by io and os packages since Go 1.16: https://tip.golang.org/doc/go1.16#ioutil"
-
 linters:
-  fast: false
-  disable-all: true
+  default: none
   enable:
     - asciicheck
     - bodyclose
@@ -28,10 +12,7 @@ linters:
     - dogsled
     - errcheck
     - copyloopvar
-    - gci
-    - gofmt
     - goheader
-    - goimports
     - gomodguard
     - goprintffuncname
     - govet
@@ -41,8 +22,6 @@ linters:
     - nolintlint
     - prealloc
     - staticcheck
-    - stylecheck
-    - typecheck
     - unconvert
     - unused
     - whitespace
@@ -95,12 +74,34 @@ linters:
 #    - wastedassign
 #    - wrapcheck
 #    - wsl
+  settings:
+    depguard:
+      rules:
+        prevent_unmaintained_packages:
+          list-mode: strict
+          files:
+            - $all
+            - "!$test"
+          allow:
+            - $gostd
+            - golang.org/x/crypto/argon2
 
-issues:
-  exclude-rules:
-    - linters:
-        - staticcheck
-      text: "SA1019:"
-    - linters:
-        - stylecheck
-      text: "ST1005:"
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+      no-inline-comments: true
+      no-prefix-comments: true
+    gofmt:
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
+        - pattern: 'a[b:len(a)]'
+          replacement: 'a[b:]'

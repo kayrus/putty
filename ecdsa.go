@@ -72,7 +72,7 @@ func (k Key) readECDSAPrivateKey() (*ecdsa.PrivateKey, error) {
 	// validate X and Y values
 	pKey := make([]byte, (curveOrder.BitLen()+7)/8)
 	copy(pKey[len(pKey)-len(priv.Bytes()):], priv.Bytes())
-	xC, yC := publicKey.Curve.ScalarBaseMult(pKey)
+	xC, yC := publicKey.ScalarBaseMult(pKey)
 	if publicKey.X.Cmp(xC) != 0 {
 		return nil, fmt.Errorf("calculated X doesn't correspond to public one")
 	}

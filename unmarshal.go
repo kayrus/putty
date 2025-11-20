@@ -10,7 +10,7 @@ import (
 	"reflect"
 )
 
-func unmarshal(data []byte, val interface{}, enc bool) error {
+func unmarshal(data []byte, val any, enc bool) error {
 	v := reflect.ValueOf(val).Elem()
 	buf := bytes.NewReader(data)
 
